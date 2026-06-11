@@ -1,0 +1,18 @@
+# Logs
+dahdouh/*.log
+dahdouh/backup_cron.log
+dahdouh/auto_update.log
+
+# Claude Code config (developer tool, not part of the system)
+dahdouh/.claude/
+
+# Internal dev/testing files
+dahdouh/RETEST_CHECKLIST.md
+dahdouh/TESTING_CHECKLIST.md
+
+# Backup files created by the system
+dahdouh/backups/
+
+# OS files
+Thumbs.db
+.DS_Store

@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zoughaib Market — POS System Presentation</title>
+<style>
+  /* ── Reset & base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 13px;
+    color: #1a1a1a;
+    background: #f0f0f0;
+    line-height: 1.6;
+  }
+
+  /* ── Page wrapper ── */
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    margin: 12mm auto;
+    background: #fff;
+    padding: 18mm 18mm 16mm 18mm;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+    page-break-after: always;
+    position: relative;
+  }
+  .page:last-child { page-break-after: auto; }
+
+  /* ── Brand colours ── */
+  :root {
+    --green-dark:  #1a3a1a;
+    --green-mid:   #2d5a2d;
+    --green-light: #4a8c4a;
+    --green-pale:  #e8f5e8;
+    --gold:        #c8a84b;
+    --text-light:  #555;
+    --border:      #d0d0d0;
+  }
+
+  /* ══════════════════════════════════════════════
+     COVER PAGE
+  ══════════════════════════════════════════════ */
+  .cover {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    min-height: 297mm;
+    padding: 30mm 20mm;
+    background: linear-gradient(160deg, var(--green-dark) 0%, var(--green-mid) 60%, var(--green-light) 100%);
+    color: #fff;
+  }
+  .cover-logo {
+    width: 90px; height: 90px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.4);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 38px;
+    margin-bottom: 24px;
+  }
+  .cover h1 {
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+    color: #fff;
+  }
+  .cover h2 {
+    font-size: 16px;
+    font-weight: 400;
+    color: rgba(255,255,255,0.75);
+    margin-bottom: 36px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .cover-divider {
+    width: 60px; height: 3px;
+    background: var(--gold);
+    border-radius: 2px;
+    margin: 0 auto 36px;
+  }
+  .cover-tagline {
+    font-size: 18px;
+    font-weight: 300;
+    color: rgba(255,255,255,0.9);
+    max-width: 380px;
+    line-height: 1.7;
+    margin-bottom: 48px;
+  }
+  .cover-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 56px;
+  }
+  .cover-pill {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 12px;
+    color: #fff;
+  }
+  .cover-footer {
+    position: absolute;
+    bottom: 18mm;
+    left: 0; right: 0;
+    text-align: center;
+    color: rgba(255,255,255,0.5);
+    font-size: 11px;
+  }
+
+  /* ══════════════════════════════════════════════
+     SECTION HEADERS
+  ══════════════════════════════════════════════ */
+  .page-header {
+    border-bottom: 3px solid var(--green-mid);
+    padding-bottom: 10px;
+    margin-bottom: 22px;
+  }
+  .page-header h2 {
+    font-size: 20px;
+    color: var(--green-dark);
+    font-weight: 700;
+  }
+  .page-header p {
+    font-size: 12px;
+    color: var(--text-light);
+    margin-top: 3px;
+  }
+
+  .section-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--green-dark);
+    border-left: 4px solid var(--green-mid);
+    padding-left: 10px;
+    margin: 20px 0 10px;
+  }
+
+  /* ══════════════════════════════════════════════
+     FEATURE CARDS GRID
+  ══════════════════════════════════════════════ */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .card-grid-2 { grid-template-columns: repeat(2, 1fr); }
+  .feat-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    background: #fafafa;
+  }
+  .feat-card-icon {
+    font-size: 22px;
+    margin-bottom: 6px;
+  }
+  .feat-card h4 {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--green-dark);
+    margin-bottom: 4px;
+  }
+  .feat-card p {
+    font-size: 11px;
+    color: var(--text-light);
+    line-height: 1.5;
+  }
+  .feat-card.highlight {
+    border-color: var(--green-mid);
+    background: var(--green-pale);
+  }
+
+  /* ══════════════════════════════════════════════
+     ROLE BADGES
+  ══════════════════════════════════════════════ */
+  .role-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .role-admin    { background: #c8a84b22; color: #7a6010; border: 1px solid #c8a84b; }
+  .role-cashier  { background: #1a3a1a22; color: #1a3a1a; border: 1px solid var(--green-mid); }
+  .role-stock    { background: #2563eb22; color: #1e40af; border: 1px solid #2563eb; }
+
+  /* ══════════════════════════════════════════════
+     STEP-BY-STEP WORKFLOWS
+  ══════════════════════════════════════════════ */
+  .steps { list-style: none; margin: 8px 0 14px; }
+  .steps li {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 8px;
+    align-items: flex-start;
+  }
+  .step-num {
+    min-width: 22px; height: 22px;
+    background: var(--green-mid);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .steps li p { font-size: 12px; color: #333; line-height: 1.5; }
+  .steps li p strong { color: var(--green-dark); }
+
+  /* ══════════════════════════════════════════════
+     INLINE TIPS / NOTES
+  ══════════════════════════════════════════════ */
+  .tip {
+    background: var(--green-pale);
+    border-left: 4px solid var(--green-light);
+    border-radius: 0 6px 6px 0;
+    padding: 8px 12px;
+    font-size: 11px;
+    color: #2d5a2d;
+    margin: 10px 0;
+  }
+  .tip strong { font-weight: 700; }
+  .warn {
+    background: #fff8e1;
+    border-left: 4px solid #f9a825;
+    border-radius: 0 6px 6px 0;
+    padding: 8px 12px;
+    font-size: 11px;
+    color: #5a4000;
+    margin: 10px 0;
+  }
+
+  /* ══════════════════════════════════════════════
+     TABLES
+  ══════════════════════════════════════════════ */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    margin: 10px 0 16px;
+  }
+  th {
+    background: var(--green-dark);
+    color: #fff;
+    padding: 6px 8px;
+    text-align: left;
+    font-weight: 600;
+  }
+  td { padding: 5px 8px; border-bottom: 1px solid #eee; }
+  tr:nth-child(even) td { background: #f9f9f9; }
+
+  /* ══════════════════════════════════════════════
+     KEY-VALUE LIST
+  ══════════════════════════════════════════════ */
+  .kv-list { margin: 8px 0 14px; }
+  .kv-list dt {
+    font-weight: 700;
+    font-size: 11px;
+    color: var(--green-dark);
+    float: left;
+    clear: left;
+    width: 160px;
+  }
+  .kv-list dd {
+    font-size: 11px;
+    color: #333;
+    margin-left: 168px;
+    margin-bottom: 5px;
+  }
+
+  /* ══════════════════════════════════════════════
+     FOOTER STRIP
+  ══════════════════════════════════════════════ */
+  .page-footer {
+    position: absolute;
+    bottom: 10mm;
+    left: 18mm; right: 18mm;
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: #aaa;
+    border-top: 1px solid #eee;
+    padding-top: 6px;
+  }
+
+  /* ══════════════════════════════════════════════
+     PRINT OVERRIDES
+  ══════════════════════════════════════════════ */
+  @media print {
+    body { background: #fff; }
+    .page {
+      margin: 0;
+      box-shadow: none;
+      padding: 14mm 16mm 14mm 16mm;
+    }
+    .no-print { display: none !important; }
+  }
+
+  /* ── Print button (screen only) ── */
+  .print-btn {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    background: var(--green-mid);
+    color: #fff;
+    border: none;
+    border-radius: 50px;
+    padding: 12px 28px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    z-index: 999;
+  }
+  .print-btn:hover { background: var(--green-dark); }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════ PRINT BUTTON ════════════════════ -->
+<button class="print-btn no-print" onclick="window.print()">🖨 Save / Print PDF</button>
+
+<!-- ════════════════════════════════════════════════════════
+     PAGE 1 — COVER
+════════════════════════════════════════════════════════ -->
+<div class="page cover">
+  <div class="cover-logo">🛒</div>
+  <h1>Zoughaib Market</h1>
+  <h2>Point of Sale System</h2>
+  <div class="cover-divider"></div>
+  <p class="cover-tagline">
+    A complete retail management solution built for your mini market — fast sales, full inventory control, and real-time financial tracking.
+  </p>
+  <div class="cover-pills">
+    <span class="cover-pill">Point of Sale</span>
+    <span class="cover-pill">Inventory Management</span>
+    <span class="cover-pill">Dual Currency (USD / LBP)</span>
+    <span class="cover-pill">Supplier Tracking</span>
+    <span class="cover-pill">Purchase Orders</span>
+    <span class="cover-pill">Cash Register</span>
+    <span class="cover-pill">Consignment (Amenities)</span>
+    <span class="cover-pill">Financial Reports</span>
+    <span class="cover-pill">Multi-User Roles</span>
+    <span class="cover-pill">Works Offline</span>
+  </div>
+  <div class="cover-footer">
+    Zoughaib Market · Ras El Metn, Lebanon · Confidential
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     PAGE 2 — SYSTEM OVERVIEW & KEY BENEFITS
+════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <h2>System Overview</h2>
+    <p>What the system does and why it was built for your store</p>
+  </div>
+
+  <div class="section-title">What Is This System?</div>
+  <p style="font-size:12px;color:#333;margin-bottom:14px;">
+    The Zoughaib Market POS is a custom-built retail management platform running locally on your computer — no internet required. It handles everything from ringing up a sale at the counter to tracking supplier debts, managing stock, and producing end-of-day financial summaries. Multiple staff members can use it at the same time on different devices connected to the same network.
+  </p>
+
+  <div class="section-title">Key Benefits</div>
+  <div class="card-grid">
+    <div class="feat-card highlight">
+      <div class="feat-card-icon">⚡</div>
+      <h4>Fast Checkout</h4>
+      <p>Scan barcodes or search by name. Cart updates instantly. Supports cash (USD &amp; LBP), card, and credit sales.</p>
+    </div>
+    <div class="feat-card highlight">
+      <div class="feat-card-icon">💱</div>
+      <h4>Dual Currency</h4>
+      <p>All prices in USD with live LBP equivalent. Exchange rate set once in settings — updates everywhere automatically.</p>
+    </div>
+    <div class="feat-card highlight">
+      <div class="feat-card-icon">📦</div>
+      <h4>Smart Inventory</h4>
+      <p>FIFO batch stock tracking. Separate handling for bulk items (fruits/veg) and boxed goods. Auto stock deduction on every sale.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-card-icon">🏦</div>
+      <h4>Cash Register Control</h4>
+      <p>Two physical drawers (USD &amp; LBP) tracked in real-time. Every movement logged with source and timestamp.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-card-icon">🤝</div>
+      <h4>Supplier Management</h4>
+      <p>Track what you owe each supplier. Purchase orders, direct purchases, and consignment goods all handled separately.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-card-icon">📊</div>
+      <h4>Financial Reports</h4>
+      <p>Daily, weekly, and monthly profit &amp; loss. Revenue, cost, and margin breakdowns by product, category, or period.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-card-icon">👥</div>
+      <h4>Multi-User Roles</h4>
+      <p>Admin, Cashier, and Stock roles. Each staff member sees only what they need — no accidental access to financials.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-card-icon">🌐</div>
+      <h4>Works on Any Device</h4>
+      <p>Opens in any browser on your local network. Use one PC as server — tablets, phones, and other PCs connect via Wi-Fi.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-card-icon">🔒</div>
+      <h4>Works Offline</h4>
+      <p>No internet dependency. All data stored locally on your machine. Nothing sent to external servers.</p>
+    </div>
+  </div>
+
+  <div class="section-title">System Requirements</div>
+  <div class="kv-list">
+    <dt>Server PC</dt><dd>Windows PC running XAMPP (provided). Stays on during business hours.</dd>
+    <dt>Other Devices</dt><dd>Any device with a browser (phone, tablet, PC) on the same Wi-Fi.</dd>
+    <dt>Internet</dt><dd>Not required for normal operation.</dd>
+    <dt>Data Backup</dt><dd>Export database regularly via phpMyAdmin (included with XAMPP).</dd>
+  </div>
+
+  <div class="page-footer">
+    <span>Zoughaib Market POS</span>
+    <span>System Overview</span>
+    <span>Page 2</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     PAGE 3 — USER ROLES & ACCESS
+════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <h2>User Roles &amp; Access</h2>
+    <p>Who can do what in the system</p>
+  </div>
+
+  <div class="section-title">Three Roles</div>
+
+  <table>
+    <tr>
+      <th style="width:18%">Role</th>
+      <th style="width:16%">Badge</th>
+      <th>What They Can Access</th>
+      <th style="width:26%">Typical User</th>
+    </tr>
+    <tr>
+      <td><strong>Admin</strong></td>
+      <td><span class="role-badge role-admin">ADMIN</span></td>
+      <td>Everything — all pages, settings, user management, reports, cash register, financial data</td>
+      <td>Owner / Manager</td>
+    </tr>
+    <tr>
+      <td><strong>Cashier</strong></td>
+      <td><span class="role-badge role-cashier">CASHIER</span></td>
+      <td>POS (sales), Customers, Cash Register, Expenses</td>
+      <td>Counter staff / Cashier</td>
+    </tr>
+    <tr>
+      <td><strong>Stock</strong></td>
+      <td><span class="role-badge role-stock">STOCK</span></td>
+      <td>Products, Purchases, Suppliers, Amenities, Purchase Orders, Import</td>
+      <td>Stockroom / receiving staff</td>
+    </tr>
+  </table>
+
+  <div class="tip">
+    <strong>Tip:</strong> Create separate login accounts for each staff member so you can track who made each change.
+    Go to <strong>Settings → Users</strong> to add, edit, or deactivate accounts.
+  </div>
+
+  <div class="section-title">How to Log In</div>
+  <ul class="steps">
+    <li><div class="step-num">1</div><p>Open a browser on any device connected to the store's Wi-Fi.</p></li>
+    <li><div class="step-num">2</div><p>Type the server address in the address bar: <strong>http://&lt;server-IP&gt;/dahdouh</strong> (or <strong>http://localhost/dahdouh</strong> on the server PC itself).</p></li>
+    <li><div class="step-num">3</div><p>Enter your <strong>username</strong> and <strong>password</strong>, then click <strong>Login</strong>.</p></li>
+    <li><div class="step-num">4</div><p>You are taken directly to the <strong>Dashboard</strong> showing today's sales summary.</p></li>
+  </ul>
+
+  <div class="warn">
+    <strong>Security:</strong> Change the default admin password (<code>admin / admin123</code>) immediately after installation. Never share the admin password with cashier-level staff.
+  </div>
+
+  <div class="section-title">Managing Users</div>
+  <ul class="steps">
+    <li><div class="step-num">1</div><p>Go to <strong>Settings → Users</strong> (Admin only).</p></li>
+    <li><div class="step-num">2</div><p>Click <strong>Add User</strong>. Enter full name, username, password, and select a role.</p></li>
+    <li><div class="step-num">3</div><p>To change a password or deactivate an account, click the edit icon next to the user.</p></li>
+  </ul>
+
+  <div class="page-footer">
+    <span>Zoughaib Market POS</span>
+    <span>User Roles</span>
+    <span>Page 3</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     PAGE 4 — POINT OF SALE
+════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <h2>Point of Sale (POS)</h2>
+    <p>Processing sales at the counter <span class="role-badge role-cashier">CASHIER</span> <span class="role-badge role-admin">ADMIN</span></p>
+  </div>
+
+  <div class="section-title">Making a Sale</div>
+  <ul class="steps">
+    <li><div class="step-num">1</div><p>Click <strong>POS</strong> in the menu. The sale screen opens with an empty cart on the right.</p></li>
+    <li><div class="step-num">2</div><p>Add items using the <strong>search bar</strong> (type name or scan barcode) or browse the product grid on the left.</p></li>
+    <li><div class="step-num">3</div><p>Use the <strong>+ / −</strong> buttons to adjust quantity. For bulk items (e.g. vegetables), type the exact weight in grams/kg.</p></li>
+    <li><div class="step-num">4</div><p>If the customer has a <strong>loyalty account</strong>, search for them by name or phone in the Customer field at the top of the cart.</p></li>
+    <li><div class="step-num">5</div><p>Click <strong>Confirm Payment</strong>. A payment dialog appears.</p></li>
+    <li><div class="step-num">6</div><p>Enter the amount given (USD or LBP) — or leave both at zero for exact payment. Click <strong>Complete Sale</strong>.</p></li>
+    <li><div class="step-num">7</div><p>The receipt appears on screen. Click <strong>Print</strong> to print or share.</p></li>
+  </ul>
+
+  <div class="tip">
+    <strong>Box products:</strong> When you add a boxed item, the quantity increases by the units-per-box (e.g. +12 for a box of 12). You can sell individual units too — just type the number directly.
+  </div>
+
+  <div class="section-title">Payment Methods</div>
+  <table>
+    <tr><th>Method</th><th>What Happens</th></tr>
+    <tr><td><strong>Cash (USD)</strong></td><td>Amount deducted from USD drawer. Change calculated and shown.</td></tr>
+    <tr><td><strong>Cash (LBP)</strong></td><td>Amount deducted from LBP drawer. Change shown in LBP.</td></tr>
+    <tr><td><strong>Card</strong></td><td>Sale recorded; no drawer movement.</td></tr>
+    <tr><td><strong>Credit</strong></td><td>Sale added to customer's outstanding balance (credit account).</td></tr>
+  </table>
+
+  <div class="section-title">Voiding a Sale</div>
+  <ul class="steps">
+    <li><div class="step-num">1</div><p>Go to <strong>Reports</strong> or find the sale in the sales log.</p></li>
+    <li><div class="step-num">2</div><p>Click the <strong>Void</strong> button next to the sale. Confirm.</p></li>
+    <li><div class="step-num">3</div><p>Stock is restored; cash drawer is adjusted; the sale is marked as voided (still visible for audit).</p></li>
+  </ul>
+
+  <div class="warn">
+    <strong>Note:</strong> Only Admin users can void a sale after it has been completed.
+  </div>
+
+  <div class="page-footer">
+    <span>Zoughaib Market POS</span>
+    <span>Point of Sale</span>
+    <span>Page 4</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     PAGE 5 — PRODUCTS & INVENTORY
+════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <h2>Products &amp; Inventory</h2>
+    <p>Managing your product catalogue and stock levels <span class="role-badge role-stock">STOCK</span> <span class="role-badge role-admin">ADMIN</span></p>
+  </div>
+
+  <div class="section-title">Product Types</div>
+  <table>
+    <tr><th style="width:20%">Type</th><th>Description</th><th style="width:30%">Stock Tracking</th></tr>
+    <tr>
+      <td><strong>Regular</strong></td>
+      <td>Standard packaged goods (drinks, canned food, etc.)</td>
+      <td>Full FIFO batch tracking. Low-stock alerts.</td>
+    </tr>
+    <tr>
+      <td><strong>Bulk</strong></td>
+      <td>Sold by weight (vegetables, fruits, nuts, etc.)</td>
+      <td>No stock count. Purchase recorded as lump-sum cost.</td>
+    </tr>
+    <tr>
+      <td><strong>Box (packaged)</strong></td>
+      <td>Received in boxes, sold as individual units</td>
+      <td>Stock counted in units. System converts boxes → units on receive.</td>
+    </tr>
+    <tr>
+      <td><strong>Consignment</strong></td>
+      <td>Supplier's goods sold in your store (amenities)</td>
+      <td>Managed separately in the Amenities section.</td>
+    </tr>
+  </table>
+
+  <div class="section-title">Adding a New Product</div>
+  <ul class="steps">
+    <li><div class="step-num">1</div><p>Go to <strong>Products</strong> and click <strong>Add Product</strong>.</p></li>
+    <li><div class="step-num">2</div><p>Enter: <strong>Name, Category, Unit</strong> (pcs / kg / box), <strong>Cost Price, Sell Price</strong>.</p></li>
+    <li><div class="step-num">3</div><p>For box products: enter <strong>Units per Box</strong> and optionally a <strong>Box Sell Price</strong>.</p></li>
+    <li><div class="step-num">4</div><p>Set a <strong>Low Stock Alert</strong> threshold — the system will highlight the product when stock falls below this number.</p></li>
+    <li><div class="step-num">5</div><p>Click <strong>Save</strong>. A barcode is auto-generated. Print it from <strong>Products → Print Barcodes</strong>.</p></li>
+  </ul>
+
+  <div class="section-title">Stock Management</div>
+  <div class="card-grid card-grid-2">
+    <div class="feat-card">
+      <h4>FIFO Batches</h4>
+      <p>Each purchase creates a stock batch with its cost price. When a product is sold, the oldest batch is deducted first. If you buy the same product at a different price, a new batch is created automatically.</p>
+    </div>
+    <div class="feat-card">
+      <h4>Importing Products</h4>
+      <p>Go to <strong>Import Products</strong> to upload a CSV file with bulk product data. Useful when setting up the store for the first time or adding a large new category.</p>
+    </div>
+  </div>
+
+  <div class="tip">
+    <strong>Tip:</strong> Use <strong>Products → Print Barcodes</strong> to print barcode labels for any product. Select multiple products and print to a label printer or regular paper.
+  </div>
+
+  <div class="page-footer">
+    <span>Zoughaib Market POS</span>
+    <span>Products &amp; Inventory</span>
+    <span>Page 5</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     PAGE 6 — PURCHASE ORDERS
+════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <h2>Purchase Orders</h2>
+    <p>Ordering from suppliers and receiving stock <span class="role-badge role-stock">STOCK</span> <span class="role-badge role-admin">ADMIN</span></p>
+  </div>
+
+  <p style="font-size:12px;color:#333;margin-bottom:14px;">
+    Purchase Orders (POs) let you formally request goods from a supplier before they arrive. Once the delivery arrives, you "receive" the PO and stock is updated automatically.
+  </p>
+
+  <div class="section-title">Creating a Purchase Order</div>
+  <ul class="steps">
+    <li><div class="step-num">1</div><p>Go to <strong>Purchase Orders</strong> and click <strong>New PO</strong>.</p></li>
+    <li><div class="step-num">2</div><p>Select a <strong>Supplier</strong> from the dropdown.</p></li>
+    <li><div class="step-num">3</div><p>Add items: search for an existing product or type a new product name. Enter <strong>Quantity</strong> and <strong>Estimated Price</strong>.</p></li>
+    <li><div class="step-num">4</div><p>For a <strong>new product in a box</strong>: set Unit = Box, enter <strong>Units per Box</strong>. The system creates the product automatically when you receive the order.</p></li>
+    <li><div class="step-num">5</div><p>Click <strong>Save PO</strong>. A PO number (e.g. PO-2026-0001) is assigned.</p></li>
+  </ul>
+
+  <div class="section-title">PO Status Flow</div>
+  <table>
+    <tr><th>Status</th><th>Meaning</th><th>What You Can Do</th></tr>
+    <tr><td><strong>Draft</strong></td><td>PO created, not sent yet</td><td>Edit, delete, or send to supplier</td></tr>
+    <tr><td><strong>Sent</strong></td><td>Supplier has been notified (WhatsApp or print)</td><td>Change to Confirmed or Cancelled</td></tr>
+    <tr><td><strong>Confirmed</strong></td><td>Supplier confirmed the order</td><td>Awaiting delivery</td></tr>
+    <tr><td><strong>Received</strong></td><td>Goods arrived and stock updated</td><td>View only</td></tr>
+    <tr><td><strong>Cancelled</strong></td><td>Order was cancelled</td><td>View only</td></tr>
+  </table>
+
+  <div class="section-title">Receiving a PO</div>
+  <ul class="steps">
+    <li><div class="step-num">1</div><p>On the PO list, click the <strong>Receive</strong> button (appears when status is Confirmed or Sent).</p></li>
+    <li><div class="step-num">2</div><p>A modal opens showing all ordered items. Adjust <strong>received quantity</strong> and <strong>actual cost</strong> if different from the estimate.</p></li>
+    <li><div class="step-num">3</div><p>Optionally update <strong>Sell Prices</strong> for items you want to reprice.</p></li>
+    <li><div class="step-num">4</div><p>In the <strong>Payment Settlement</strong> section, choose how you paid: <em>Cash from register, Cash from owner,</em> or <em>Pay later</em>.</p></li>
+    <li><div class="step-num">5</div><p>Click <strong>Commit Receipt &amp; Update Stock</strong>. Stock updates immediately; a Purchase record is created automatically.</p></li>
+  </ul>
+
+  <div class="tip">
+    <strong>Send via WhatsApp:</strong> Click the WhatsApp icon on any PO to open a pre-filled message to the supplier with the full item list.
+  </div>
+
+  <div class="page-footer">
+    <span>Zoughaib Market POS</span>
+    <span>Purchase Orders</span>
+    <span>Page 6</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     PAGE 7 — PURCHASES & SUPPLIERS
+════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <h2>Purchases &amp; Suppliers</h2>
+    <p>Recording stock purchases and managing what you owe <span class="role-badge role-stock">STOCK</span> <span class="role-badge role-admin">ADMIN</span></p>
+  </div>
+
+  <div class="section-title">Recording a Direct Purchase</div>
+  <p style="font-size:12px;color:#333;margin-bottom:10px;">
+    Use this when goods arrive without a prior Purchase Order (e.g. a supplier walks in, or a quick cash buy).
+  </p>
+  <ul class="steps">
+    <li><div class="step-num">1</div><p>Go to <strong>Purchases</strong> and click <strong>New Purchase</strong>.</p></li>
+    <li><div class="step-num">2</div><p>Select the <strong>Supplier</strong> (required). If the supplier is not in the list, add them first via the Suppliers page.</p></li>
+    <li><div class="step-num">3</div><p>Add line items: search for a product, enter quantity and unit cost.</p></li>
+    <li><div class="step-num">4</div><p>Choose a <strong>Payment Method</strong>:</p></li>
+  </ul>
+  <table style="margin-left:32px;width:calc(100% - 32px)">
+    <tr><th style="width:34%">Option</th><th>What Happens</th></tr>
+    <tr><td><strong>Deduct from Cash Register</strong></td><td>Amount withdrawn from USD drawer automatically. Supplier balance set to zero (paid on spot).</td></tr>
+    <tr><td><strong>Owner Paid Cash</strong></td><td>Amount recorded as cash deposit (owner injected money). Supplier balance set to zero.</td></tr>
+    <tr><td><strong>Pay Later</strong></td><td>No cash movement. Purchase amount appears as outstanding balance in the Suppliers tab.</td></tr>
+  </table>
+  <ul class="steps" style="margin-top:8px;">
+    <li><div class="step-num">5</div><p>Click <strong>Save Purchase</strong>. Stock batches are updated; supplier ledger is recorded.</p></li>
+  </ul>
+
+  <div class="section-title">Suppliers Page</div>
+  <p style="font-size:12px;color:#333;margin-bottom:10px;">Go to <strong>Suppliers</strong> to manage supplier accounts and settle outstanding balances.</p>
+  <ul class="steps">
+    <li><div class="step-num">1</div><p>The main list shows each supplier's <strong>current balance</strong> (how much you owe them).</p></li>
+    <li><div class="step-num">2</div><p>Click on a supplier to see their full <strong>ledger</strong> — every purchase and every payment.</p></li>
+    <li><div class="step-num">3</div><p>To make a payment: use the <strong>Pay Supplier</strong> form. Choose USD cash, LBP cash, or bank transfer. Amount is pre-filled with the outstanding balance.</p></li>
+    <li><div class="step-num">4</div><p>Click <strong>Record Payment</strong>. The supplier's balance decreases; the cash drawer is updated if cash was used.</p></li>
+  </ul>
+
+  <div class="tip">
+    <strong>Supplier ledger colours:</strong> Red entries = purchases (you owe them). Green entries = payments (you paid them). The current balance is always shown at the top.
+  </div>
+
+  <div class="page-footer">
+    <span>Zoughaib Market POS</span>
+    <span>Purchases &amp; Suppliers</span>
+    <span>Page 7</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     PAGE 8 — CASH REGISTER
+════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <h2>Cash Register</h2>
+    <p>Tracking money in and out of both drawers <span class="role-badge role-cashier">CASHIER</span> <span class="role-badge role-admin">ADMIN</span></p>
+  </div>
+
+  <p style="font-size:12px;color:#333;margin-bottom:14px;">
+    The Cash Register page is the financial heart of the system. Every cash movement — sales, purchases, expenses, owner injections — is recorded here automatically. You always know exactly how much cash is in each drawer.
+  </p>
+
+  <div class="section-title">Two Drawers</div>
+  <div class="card-grid card-grid-2">
+    <div class="feat-card highlight">
+      <h4>USD Drawer</h4>
+      <p>Tracks all dollar movements. Opening balance, cash sales, purchase withdrawals, expense deductions, and owner deposits all reflected here in real-time.</p>
+    </div>
+    <div class="feat-card highlight">
+      <h4>LBP Drawer</h4>
+      <p>Tracks all Lebanese pound movements independently. LBP sales, LBP expenses, and LBP supplier payments are recorded separately.</p>
+    </div>
+  </div>
+
+  <div class="section-title">Setting the Opening Balance</div>
+  <ul class="steps">
+    <li><div class="step-num">1</div><p>At the start of the day, go to <strong>Cash Register</strong>.</p></li>
+    <li><div class="step-num">2</div><p>Enter the physical cash count in the <strong>Set Opening Balance</strong> box (USD and/or LBP separately).</p></li>
+    <li><div class="step-num">3</div><p>Click <strong>Set</strong>. The system adjusts the running balance to match your physical count.</p></li>
+  </ul>
+
+  <div class="section-title">What Updates the Drawer Automatically</div>
+  <table>
+    <tr><th>Action</th><th>Drawer Effect</th></tr>
+    <tr><td>Cash sale (USD)</td><td>USD Drawer +sale amount</td></tr>
+    <tr><td>Cash sale (LBP)</td><td>LBP Drawer +sale amount</td></tr>
+    <tr><td>Purchase paid from cash register</td><td>USD Drawer −purchase total</td></tr>
+    <tr><td>Owner paid cash for purchase</td><td>USD Drawer +amount (deposit recorded)</td></tr>
+    <tr><td>Expense (USD)</td><td>USD Drawer −expense amount</td></tr>
+    <tr><td>Expense (LBP)</td><td>LBP Drawer −expense amount</td></tr>
+    <tr><td>Supplier payment (cash USD)</td><td>USD Drawer −payment amount</td></tr>
+    <tr><td>Consignment settlement (owner cash)</td><td>USD Drawer +amount (owner deposit)</td></tr>
+  </table>
+
+  <div class="section-title">End of Shift</div>
+  <ul class="steps">
+    <li><div class="step-num">1</div><p>Click <strong>End of Shift</strong> at the top of the Cash Register page.</p></li>
+    <li><div class="step-num">2</div><p>Review the shift summary: total sales, cash in, cash out.</p></li>
+    <li><div class="step-num">3</div><p>Add an optional note and click <strong>Close Shift</strong>. A snapshot is saved for future reference.</p></li>
+  </ul>
+
+  <div class="page-footer">
+    <span>Zoughaib Market POS</span>
+    <span>Cash Register</span>
+    <span>Page 8</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     PAGE 9 — CUSTOMERS & EXPENSES
+════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <h2>Customers &amp; Expenses</h2>
+    <p>Loyalty accounts and recording store expenses</p>
+  </div>
+
+  <div class="section-title">Customer Accounts <span class="role-badge role-cashier">CASHIER</span> <span class="role-badge role-admin">ADMIN</span></div>
+  <p style="font-size:12px;color:#333;margin-bottom:10px;">
+    Create accounts for regular customers to track their purchase history and manage credit balances.
+  </p>
+  <ul class="steps">
+    <li><div class="step-num">1</div><p>Go to <strong>Customers</strong> and click <strong>Add Customer</strong>.</p></li>
+    <li><div class="step-num">2</div><p>Enter name and phone number. Optionally set a starting credit balance.</p></li>
+    <li><div class="step-num">3</div><p>At the POS, search for the customer by name or phone before completing the sale.</p></li>
+    <li><div class="step-num">4</div><p>If payment method is set to <strong>Credit</strong>, the sale amount is added to their outstanding balance.</p></li>
+    <li><div class="step-num">5</div><p>To record a customer payment: go to <strong>Customers</strong>, find the customer, and click <strong>Record Payment</strong>.</p></li>
+  </ul>
+
+  <div class="tip">
+    <strong>Balance convention:</strong> Positive balance = you owe the customer (store credit). Negative balance = customer owes you (tab/debt).
+  </div>
+
+  <div class="section-title">Expenses <span class="role-badge role-cashier">CASHIER</span> <span class="role-badge role-admin">ADMIN</span></div>
+  <p style="font-size:12px;color:#333;margin-bottom:10px;">
+    Record any store expenses (rent, electricity, cleaning supplies, etc.) so they appear in financial reports.
+  </p>
+  <ul class="steps">
+    <li><div class="step-num">1</div><p>Go to <strong>Expenses</strong> and click <strong>Add Expense</strong>.</p></li>
+    <li><div class="step-num">2</div><p>Enter: <strong>Category</strong> (e.g. Rent, Utilities), <strong>Amount</strong>, and a <strong>Note</strong>.</p></li>
+    <li><div class="step-num">3</div><p>Select the <strong>currency</strong> (USD or LBP) and whether to <strong>deduct from the cash register</strong>.</p></li>
+    <li><div class="step-num">4</div><p>Click <strong>Save</strong>. The expense is logged; the drawer decreases automatically if cash was selected.</p></li>
+  </ul>
+
+  <table>
+    <tr><th style="width:40%">Expense Option</th><th>Effect</th></tr>
+    <tr><td>Deduct from cash register (USD)</td><td>USD Drawer decreases by expense amount</td></tr>
+    <tr><td>Deduct from cash register (LBP)</td><td>LBP Drawer decreases by expense amount</td></tr>
+    <tr><td>Do not deduct (paid externally)</td><td>Expense recorded for reports; no drawer change</td></tr>
+  </table>
+
+  <div class="page-footer">
+    <span>Zoughaib Market POS</span>
+    <span>Customers &amp; Expenses</span>
+    <span>Page 9</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     PAGE 10 — AMENITIES / CONSIGNMENT
+════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <h2>Amenities / Consignment</h2>
+    <p>Managing supplier goods sold on your behalf <span class="role-badge role-stock">STOCK</span> <span class="role-badge role-admin">ADMIN</span></p>
+  </div>
+
+  <p style="font-size:12px;color:#333;margin-bottom:14px;">
+    Consignment (amenities) are products owned by an external supplier but displayed and sold in your store. You keep a percentage of each sale as your market cut, and periodically settle the rest with the supplier.
+  </p>
+
+  <div class="section-title">How It Works</div>
+  <div class="card-grid">
+    <div class="feat-card">
+      <div class="feat-card-icon">1️⃣</div>
+      <h4>Supplier delivers goods</h4>
+      <p>Add a consignment product under the supplier's name in Products. Set your selling price and the supplier's agreed percentage/amount.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-card-icon">2️⃣</div>
+      <h4>Sale recorded</h4>
+      <p>Each sale of a consignment product is automatically tracked — revenue split between supplier due and your market profit.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-card-icon">3️⃣</div>
+      <h4>Periodic settlement</h4>
+      <p>When it is time to pay the supplier, use the Pay Supplier form to record the settlement and update cash accordingly.</p>
+    </div>
+  </div>
+
+  <div class="section-title">Settling with a Consignment Supplier</div>
+  <ul class="steps">
+    <li><div class="step-num">1</div><p>Go to <strong>Amenities</strong> and click on the supplier name from the left panel.</p></li>
+    <li><div class="step-num">2</div><p>Review the <strong>Outstanding Amount</strong> (what you owe them based on unsettled sales).</p></li>
+    <li><div class="step-num">3</div><p>In the <strong>Pay Supplier</strong> form, enter the amount (pre-filled with the outstanding balance).</p></li>
+    <li><div class="step-num">4</div><p>Choose the payment method:</p></li>
+  </ul>
+  <table style="margin-left:32px;width:calc(100% - 32px)">
+    <tr><th style="width:42%">Option</th><th>Effect</th></tr>
+    <tr><td><strong>Deduct from cash register (USD)</strong></td><td>Withdrawn from USD drawer automatically</td></tr>
+    <tr><td><strong>Owner paid cash</strong></td><td>Owner's money — recorded as deposit to register</td></tr>
+    <tr><td><strong>Bank transfer</strong></td><td>No cash drawer change; ledger updated</td></tr>
+  </table>
+  <ul class="steps" style="margin-top:8px;">
+    <li><div class="step-num">5</div><p>Click <strong>Record Settlement</strong>. The outstanding balance decreases by the amount paid. Partial payments are supported — only the portion paid is settled.</p></li>
+  </ul>
+
+  <div class="section-title">Consignment Reports</div>
+  <p style="font-size:12px;color:#333;">Go to <strong>Amenities → Reports</strong> tab to see revenue, supplier due, and your market cut by supplier or product for any date range.</p>
+
+  <div class="page-footer">
+    <span>Zoughaib Market POS</span>
+    <span>Amenities / Consignment</span>
+    <span>Page 10</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     PAGE 11 — REPORTS & SETTINGS
+════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <h2>Reports &amp; Settings</h2>
+    <p>Financial insights and system configuration <span class="role-badge role-admin">ADMIN</span></p>
+  </div>
+
+  <div class="section-title">Reports Page</div>
+  <p style="font-size:12px;color:#333;margin-bottom:10px;">
+    Go to <strong>Reports</strong> for a full financial picture of your store. Filter by any date range.
+  </p>
+  <table>
+    <tr><th style="width:32%">Report</th><th>What It Shows</th></tr>
+    <tr><td><strong>Sales Summary</strong></td><td>Total revenue, number of transactions, average sale value for the period</td></tr>
+    <tr><td><strong>Profit &amp; Loss</strong></td><td>Revenue minus cost of goods sold — your gross profit and margin %</td></tr>
+    <tr><td><strong>Top Products</strong></td><td>Best-selling products by revenue and quantity</td></tr>
+    <tr><td><strong>Category Breakdown</strong></td><td>Revenue and profit split by product category</td></tr>
+    <tr><td><strong>Cash Flow</strong></td><td>All cash register movements in the period — in, out, and net</td></tr>
+    <tr><td><strong>Expenses Summary</strong></td><td>Total expenses by category</td></tr>
+    <tr><td><strong>Shift History</strong></td><td>All end-of-shift snapshots with closing balances</td></tr>
+  </table>
+
+  <div class="tip">
+    <strong>Daily routine:</strong> Check Reports at the end of each day. Compare the <em>Cash Register balance</em> to the physical cash in the drawer to catch any discrepancies immediately.
+  </div>
+
+  <div class="section-title">Settings</div>
+  <table>
+    <tr><th style="width:32%">Setting</th><th>Description</th></tr>
+    <tr><td><strong>Exchange Rate</strong></td><td>Set the USD ↔ LBP rate. All LBP prices update automatically across the system.</td></tr>
+    <tr><td><strong>Store Name / Logo</strong></td><td>Upload your logo; it appears on receipts and the login screen.</td></tr>
+    <tr><td><strong>Receipt Footer</strong></td><td>Custom message printed at the bottom of every receipt (e.g. "Thank you for shopping with us!").</td></tr>
+    <tr><td><strong>Users</strong></td><td>Add, edit, or deactivate staff accounts and assign roles.</td></tr>
+    <tr><td><strong>Categories</strong></td><td>Manage product categories used throughout the system.</td></tr>
+    <tr><td><strong>Low Stock Threshold</strong></td><td>Default minimum stock level that triggers alerts on the dashboard.</td></tr>
+  </table>
+
+  <div class="warn">
+    <strong>Exchange Rate:</strong> Update this whenever the market rate changes significantly. It affects all LBP price displays and LBP cash calculations throughout the system.
+  </div>
+
+  <div class="page-footer">
+    <span>Zoughaib Market POS</span>
+    <span>Reports &amp; Settings</span>
+    <span>Page 11</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     PAGE 12 — DAILY ROUTINES & QUICK REFERENCE
+════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <h2>Daily Routines &amp; Quick Reference</h2>
+    <p>Recommended workflows to follow every day</p>
+  </div>
+
+  <div class="section-title">Opening the Store (Morning)</div>
+  <ul class="steps">
+    <li><div class="step-num">1</div><p><strong>Count physical cash</strong> in both drawers (USD and LBP).</p></li>
+    <li><div class="step-num">2</div><p>Go to <strong>Cash Register → Set Opening Balance</strong> and enter the counted amounts.</p></li>
+    <li><div class="step-num">3</div><p>Check the <strong>Dashboard</strong> for any low-stock alerts — reorder items as needed.</p></li>
+    <li><div class="step-num">4</div><p>Staff log in with their individual accounts and start taking sales on the <strong>POS</strong>.</p></li>
+  </ul>
+
+  <div class="section-title">During the Day</div>
+  <ul class="steps">
+    <li><div class="step-num">1</div><p>Use <strong>POS</strong> for all sales. Always select the correct payment method.</p></li>
+    <li><div class="step-num">2</div><p>Record any <strong>Expenses</strong> as they happen (don't wait until end of day).</p></li>
+    <li><div class="step-num">3</div><p>When stock arrives, record a <strong>Purchase</strong> or receive a <strong>Purchase Order</strong> immediately.</p></li>
+  </ul>
+
+  <div class="section-title">Closing the Store (Evening)</div>
+  <ul class="steps">
+    <li><div class="step-num">1</div><p>Go to <strong>Cash Register → End of Shift</strong> and close the shift.</p></li>
+    <li><div class="step-num">2</div><p>Compare the system's USD and LBP balances with your physical cash count.</p></li>
+    <li><div class="step-num">3</div><p>Review <strong>Reports</strong> for today's sales summary and profit.</p></li>
+    <li><div class="step-num">4</div><p>Back up the database via <strong>phpMyAdmin</strong> (open <code>localhost/phpmyadmin</code>).</p></li>
+  </ul>
+
+  <div class="section-title">Quick Reference Card</div>
+  <table>
+    <tr><th>Task</th><th>Where to Go</th><th>Who Can Do It</th></tr>
+    <tr><td>Make a sale</td><td>POS</td><td>Cashier, Admin</td></tr>
+    <tr><td>Void a sale</td><td>Reports → find sale → Void</td><td>Admin only</td></tr>
+    <tr><td>Add stock from purchase</td><td>Purchases → New Purchase</td><td>Stock, Admin</td></tr>
+    <tr><td>Order from supplier</td><td>Purchase Orders → New PO</td><td>Stock, Admin</td></tr>
+    <tr><td>Settle supplier debt</td><td>Suppliers → click supplier → Pay</td><td>Stock, Admin</td></tr>
+    <tr><td>Record an expense</td><td>Expenses → Add Expense</td><td>Cashier, Admin</td></tr>
+    <tr><td>Check cash balance</td><td>Cash Register</td><td>Cashier, Admin</td></tr>
+    <tr><td>View financial reports</td><td>Reports</td><td>Admin only</td></tr>
+    <tr><td>Update exchange rate</td><td>Settings</td><td>Admin only</td></tr>
+    <tr><td>Add a new product</td><td>Products → Add Product</td><td>Stock, Admin</td></tr>
+    <tr><td>Print product barcodes</td><td>Products → Print Barcodes</td><td>Stock, Admin</td></tr>
+    <tr><td>Add a customer account</td><td>Customers → Add Customer</td><td>Cashier, Admin</td></tr>
+    <tr><td>Pay consignment supplier</td><td>Amenities → supplier → Pay Supplier</td><td>Stock, Admin</td></tr>
+  </table>
+
+  <div class="page-footer">
+    <span>Zoughaib Market POS</span>
+    <span>Daily Routines</span>
+    <span>Page 12</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     PAGE 13 — TECHNICAL SETUP & NETWORK
+════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <h2>Technical Setup &amp; Network Access</h2>
+    <p>Connecting multiple devices and keeping the system running</p>
+  </div>
+
+  <div class="section-title">Server Setup (One-Time)</div>
+  <ul class="steps">
+    <li><div class="step-num">1</div><p>The system runs on a <strong>Windows PC</strong> with XAMPP installed. This PC is the server — it must stay on during business hours.</p></li>
+    <li><div class="step-num">2</div><p>Open <strong>XAMPP Control Panel</strong> and start <strong>Apache</strong> and <strong>MySQL</strong>. Both must show green "Running" status.</p></li>
+    <li><div class="step-num">3</div><p>On the server PC, the system is accessible at: <strong>http://localhost/dahdouh</strong></p></li>
+  </ul>
+
+  <div class="section-title">Connecting Other Devices</div>
+  <ul class="steps">
+    <li><div class="step-num">1</div><p>Find the server PC's local IP address: open Command Prompt and type <code>ipconfig</code>. Look for the <strong>IPv4 Address</strong> (e.g. <code>192.168.1.5</code>).</p></li>
+    <li><div class="step-num">2</div><p>On any other device on the same Wi-Fi, open a browser and go to: <strong>http://192.168.1.5/dahdouh</strong> (use your actual IP).</p></li>
+    <li><div class="step-num">3</div><p>Multiple devices can be logged in simultaneously — each user with their own account.</p></li>
+  </ul>
+
+  <div class="tip">
+    <strong>Tip:</strong> Set a <strong>static (fixed) IP address</strong> on the server PC so the address never changes and other devices always connect reliably.
+  </div>
+
+  <div class="section-title">Database Backup</div>
+  <ul class="steps">
+    <li><div class="step-num">1</div><p>Open <strong>http://localhost/phpmyadmin</strong> on the server PC.</p></li>
+    <li><div class="step-num">2</div><p>Select the database <strong>pos_minimarket</strong> from the left panel.</p></li>
+    <li><div class="step-num">3</div><p>Click <strong>Export → Go</strong>. Save the <code>.sql</code> file to a USB drive or cloud storage.</p></li>
+    <li><div class="step-num">4</div><p>Repeat this daily or weekly. If the PC ever fails, this file can restore all your data.</p></li>
+  </ul>
+
+  <div class="section-title">Troubleshooting</div>
+  <table>
+    <tr><th style="width:40%">Problem</th><th>Solution</th></tr>
+    <tr><td>Page won't load</td><td>Open XAMPP Control Panel — make sure Apache and MySQL are both Running (green). Restart if needed.</td></tr>
+    <tr><td>Other devices can't connect</td><td>Check that all devices are on the same Wi-Fi. Check server IP with <code>ipconfig</code>. Disable Windows Firewall for the local network.</td></tr>
+    <tr><td>Forgot admin password</td><td>Open phpMyAdmin → pos_minimarket → users table → edit the admin row and set a new password hash.</td></tr>
+    <tr><td>Stock counts seem wrong</td><td>Check the Purchases and PO history to verify all deliveries were recorded. FIFO batches update stock automatically.</td></tr>
+  </table>
+
+  <div class="page-footer">
+    <span>Zoughaib Market POS</span>
+    <span>Technical Setup</span>
+    <span>Page 13</span>
+  </div>
+</div>
+
+</body>
+</html>
