@@ -27,13 +27,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
             ->execute([$poNumber, $supplierId, $deliveryDate, $note]);
         $poId = $pdo->lastInsertId();
 
-        $stmt = $pdo->prepare("INSERT INTO purchase_order_items (po_id, product_id, product_name, quantity, unit, estimated_price, note, new_product_upb) VALUES (?,?,?,?,?,?,?,?)");
+        $stmt = $pdo->prepare("INSERT INTO purchase_order_items (po_id, product_id, product_name, quantity, unit, estimated_price, note, new_product_upb, new_product_source) VALUES (?,?,?,?,?,?,?,?,?)");
         foreach ($items as $item) {
             $productName = trim($item['product_name'] ?? '');
             if (!$productName) continue;
             $itemUnit = $item['unit'] ?? 'pcs';
             $hasPid   = !empty($item['product_id']);
             $newUpb   = ($itemUnit === 'box' && !$hasPid) ? max(1, (int)($item['new_product_upb'] ?? 1)) : null;
+            $newSrc   = (!$hasPid && ($item['new_product_source'] ?? '') === 'consignment') ? 'consignment' : 'regular';
             $stmt->execute([
                 $poId,
                 $hasPid ? (int)$item['product_id'] : null,
@@ -43,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
                 (float)($item['estimated_price'] ?? 0),
                 trim($item['note'] ?? ''),
                 $newUpb,
+                $newSrc,
             ]);
         }
         $message = "success:Purchase Order $poNumber created.";
@@ -82,19 +84,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'recei
     if ($po && !empty($pItems)) {
         $pdo->beginTransaction();
         try {
-            // Create purchase record
+            // Create purchase record — only count non-consignment items in cost
             $ref = $po['po_number'] . '/RCV';
             $totalCost = 0;
-            foreach ($pItems as $pi) { $totalCost += (float)$pi['qty'] * (float)$pi['cost']; }
+            foreach ($pItems as $pi) {
+                $piPid    = (int)($pi['pid'] ?? 0);
+                $piNewSrc = (trim($pi['new_src'] ?? '') === 'consignment') ? 'consignment' : 'regular';
+                $piSrc    = 'regular';
+                if ($piPid) {
+                    $r = $pdo->prepare("SELECT product_source FROM products WHERE id=?");
+                    $r->execute([$piPid]);
+                    $piSrc = ($r->fetchColumn() ?: 'regular');
+                } else {
+                    $piSrc = $piNewSrc;
+                }
+                if ($piSrc !== 'consignment') {
+                    $totalCost += (float)$pi['qty'] * (float)$pi['cost'];
+                }
+            }
 
             $pdo->prepare("INSERT INTO purchases (supplier_id, reference, purchase_date, total_amount, note) VALUES (?,?,CURDATE(),?,?)")
                 ->execute([$po['supplier_id'], $ref, $totalCost, $note ?: 'Received from PO ' . $po['po_number']]);
             $purchaseId = (int)$pdo->lastInsertId();
 
-            // Update supplier balance + ledger
-            $pdo->prepare("UPDATE suppliers SET balance = balance + ? WHERE id=?")->execute([$totalCost, $po['supplier_id']]);
-            $pdo->prepare("INSERT INTO supplier_ledger (supplier_id, purchase_id, type, amount, note) VALUES (?,?,'purchase',?,?)")
-                ->execute([$po['supplier_id'], $purchaseId, $totalCost, "PO received: " . $po['po_number']]);
+            // Update supplier balance + ledger (only for owned/regular cost)
+            if ($totalCost > 0) {
+                $pdo->prepare("UPDATE suppliers SET balance = balance + ? WHERE id=?")->execute([$totalCost, $po['supplier_id']]);
+                $pdo->prepare("INSERT INTO supplier_ledger (supplier_id, purchase_id, type, amount, note) VALUES (?,?,'purchase',?,?)")
+                    ->execute([$po['supplier_id'], $purchaseId, $totalCost, "PO received: " . $po['po_number']]);
+            }
 
             // Process each item (same logic as purchases.php)
             foreach ($pItems as $pi) {
@@ -110,7 +128,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'recei
                 $prod = $pid ? $pdo->prepare("SELECT product_type, sell_price FROM products WHERE id=?") : null;
                 if ($prod) { $prod->execute([$pid]); $prod = $prod->fetch(); }
 
-                if ($prod && $prod['product_type'] === 'bulk') {
+                // Check product source for existing products
+                $prodSrc = 'regular';
+                if ($pid && $prod) {
+                    $srcRow = $pdo->prepare("SELECT product_source FROM products WHERE id=?");
+                    $srcRow->execute([$pid]);
+                    $prodSrc = $srcRow->fetchColumn() ?: 'regular';
+                }
+
+                if ($pid && $prodSrc === 'consignment') {
+                    // Existing consignment product — just add stock, no batch, no purchase cost
+                    $newSell = (float)($pi['sell'] ?? 0);
+                    if ($newSell > 0) {
+                        $pdo->prepare("UPDATE products SET stock=stock+?, sell_price=? WHERE id=?")->execute([$qty, $newSell, $pid]);
+                    } else {
+                        $pdo->prepare("UPDATE products SET stock=stock+? WHERE id=?")->execute([$qty, $pid]);
+                    }
+                } elseif ($prod && $prod['product_type'] === 'bulk') {
                     $pdo->prepare("INSERT INTO purchase_items (purchase_id,product_id,product_name,product_type,quantity,unit_cost,total) VALUES (?,?,?,'bulk',0,?,?)")
                         ->execute([$purchaseId, $pid, $pname, $cost, $lineTotal]);
                 } elseif ($pid && $prod) {
@@ -159,26 +193,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'recei
                             $pdo->prepare("UPDATE products SET stock=stock+?, cost_price=? WHERE id=?")->execute([$qty,$cost,$pid]);
                         }
                     }
-                } elseif ($itemUnit === 'box' && $newUpb > 1) {
-                    // New box product — auto-create product, batch, and purchase item
-                    $costPerUnit = round($cost / $newUpb, 4); // cost entered is per-box
-                    $totalUnits  = $qty * $newUpb;
-                    $newSell     = (float)($pi['sell'] ?? 0);
-
-                    $pdo->prepare("INSERT INTO products (name, product_type, unit, units_per_box, cost_price, sell_price, stock) VALUES (?,?,?,?,?,?,?)")
-                        ->execute([$pname, 'regular', 'box', $newUpb, $costPerUnit, $newSell, $totalUnits]);
-                    $newPid = (int)$pdo->lastInsertId();
-
-                    $pdo->prepare("INSERT INTO batches (product_id,purchase_id,cost_price,quantity_original,quantity_remaining,purchase_date) VALUES (?,?,?,?,?,CURDATE())")
-                        ->execute([$newPid, $purchaseId, $costPerUnit, $totalUnits, $totalUnits]);
-                    $batchId = (int)$pdo->lastInsertId();
-
-                    $pdo->prepare("INSERT INTO purchase_items (purchase_id,product_id,product_name,product_type,quantity,unit_cost,total,batch_id,batch_action) VALUES (?,?,?,'regular',?,?,?,?,'new')")
-                        ->execute([$purchaseId, $newPid, $pname, $totalUnits, $costPerUnit, round($totalUnits * $costPerUnit, 2), $batchId]);
                 } else {
-                    // No product_id — just record the line (no stock update)
-                    $pdo->prepare("INSERT INTO purchase_items (purchase_id,product_id,product_name,product_type,quantity,unit_cost,total) VALUES (?,NULL,?,'regular',?,?,?)")
-                        ->execute([$purchaseId,$pname,$qty,$cost,$lineTotal]);
+                    // New product (no product_id) — auto-create with chosen type
+                    $newSrc    = (trim($pi['new_src'] ?? '') === 'consignment') ? 'consignment' : 'regular';
+                    $dbSrc     = ($newSrc === 'consignment') ? 'consignment' : 'owned';
+                    $newSell   = (float)($pi['sell'] ?? 0);
+                    $conSuppId = ($newSrc === 'consignment') ? $po['supplier_id'] : null;
+
+                    if ($itemUnit === 'box' && $newUpb > 1) {
+                        $costPerUnit = round($cost / $newUpb, 4);
+                        $totalUnits  = $qty * $newUpb;
+                        $pdo->prepare("INSERT INTO products (name, product_type, unit, units_per_box, cost_price, sell_price, stock, product_source, consignment_supplier_id, consignment_cost) VALUES (?,?,?,?,?,?,?,?,?,?)")
+                            ->execute([$pname, 'regular', 'box', $newUpb, $costPerUnit, $newSell, $totalUnits, $dbSrc, $conSuppId, $newSrc === 'consignment' ? $costPerUnit : 0]);
+                        $newPid = (int)$pdo->lastInsertId();
+                        if ($newSrc !== 'consignment') {
+                            $pdo->prepare("INSERT INTO batches (product_id,purchase_id,cost_price,quantity_original,quantity_remaining,purchase_date) VALUES (?,?,?,?,?,CURDATE())")
+                                ->execute([$newPid, $purchaseId, $costPerUnit, $totalUnits, $totalUnits]);
+                            $batchId = (int)$pdo->lastInsertId();
+                            $pdo->prepare("INSERT INTO purchase_items (purchase_id,product_id,product_name,product_type,quantity,unit_cost,total,batch_id,batch_action) VALUES (?,?,?,'regular',?,?,?,?,'new')")
+                                ->execute([$purchaseId, $newPid, $pname, $totalUnits, $costPerUnit, round($totalUnits * $costPerUnit, 2), $batchId]);
+                        }
+                    } else {
+                        $pdo->prepare("INSERT INTO products (name, product_type, unit, cost_price, sell_price, stock, product_source, consignment_supplier_id, consignment_cost) VALUES (?,?,?,?,?,?,?,?,?)")
+                            ->execute([$pname, 'regular', $itemUnit, $cost, $newSell, $qty, $dbSrc, $conSuppId, $newSrc === 'consignment' ? $cost : 0]);
+                        $newPid = (int)$pdo->lastInsertId();
+                        if ($newSrc !== 'consignment') {
+                            $pdo->prepare("INSERT INTO batches (product_id,purchase_id,cost_price,quantity_original,quantity_remaining,purchase_date) VALUES (?,?,?,?,?,CURDATE())")
+                                ->execute([$newPid, $purchaseId, $cost, $qty, $qty]);
+                            $batchId = (int)$pdo->lastInsertId();
+                            $pdo->prepare("INSERT INTO purchase_items (purchase_id,product_id,product_name,product_type,quantity,unit_cost,total,batch_id,batch_action) VALUES (?,?,?,'regular',?,?,?,?,'new')")
+                                ->execute([$purchaseId, $newPid, $pname, $qty, $cost, round($qty * $cost, 2), $batchId]);
+                        }
+                    }
                 }
             }
 
@@ -445,6 +491,15 @@ function addPORow(name = '', qty = 1, unit = 'pcs', price = '', note = '', produ
                     ${poProducts.map(p=>`<option value="${p.name}" data-id="${p.id}">`).join('')}
                 </datalist>
             </div>
+            <!-- shown only for new products (not matched in DB) -->
+            <div id="type-picker-${i}" style="display:none" class="mt-1">
+                <div class="btn-group btn-group-sm w-100" role="group">
+                    <input type="radio" class="btn-check" name="items[${i}][new_product_source]" id="src-reg-${i}" value="regular" checked>
+                    <label class="btn btn-outline-primary btn-sm" for="src-reg-${i}" style="font-size:11px">Regular</label>
+                    <input type="radio" class="btn-check" name="items[${i}][new_product_source]" id="src-con-${i}" value="consignment">
+                    <label class="btn btn-outline-warning btn-sm" for="src-con-${i}" style="font-size:11px">Consignment</label>
+                </div>
+            </div>
             <!-- shown only when unit=box and product is new (not in DB) -->
             <div id="box-opts-${i}" style="display:none" class="mt-1 p-1 rounded" style="background:#fff8e1">
                 <div class="input-group input-group-sm">
@@ -461,9 +516,17 @@ function addPORow(name = '', qty = 1, unit = 'pcs', price = '', note = '', produ
                 ${['pcs','kg','box','crate','doz','L','pack'].map(u=>`<option ${u===unit?'selected':''}>${u}</option>`).join('')}
             </select>
         </td>
-        <td><div class="input-group input-group-sm"><span class="input-group-text">$</span>
-            <input type="number" name="items[${i}][estimated_price]" class="form-control form-control-sm" value="${price}" min="0" step="0.01" placeholder="per box">
-        </div></td>
+        <td>
+            <div class="input-group input-group-sm">
+                <input type="number" name="items[${i}][estimated_price]" id="eprice${i}" class="form-control form-control-sm"
+                       value="${price}" min="0" step="0.0001" data-cur="usd" oninput="poUpdateHint(${i})">
+                <button type="button" id="eprice-usd-${i}" class="btn btn-outline-secondary px-1"
+                        style="font-size:.65rem;min-width:28px;font-weight:bold" onclick="poToggleCur(${i},'usd')">$</button>
+                <button type="button" id="eprice-lbp-${i}" class="btn btn-outline-secondary px-1 opacity-50"
+                        style="font-size:.65rem;min-width:28px" onclick="poToggleCur(${i},'lbp')">L£</button>
+            </div>
+            <div id="eprice-hint-${i}" class="text-muted" style="font-size:.6rem"></div>
+        </td>
         <td><input type="text" name="items[${i}][note]" class="form-control form-control-sm" value="${note}" placeholder="Optional"></td>
         <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow('row${i}')"><i class="bi bi-trash"></i></button></td>
     `;
@@ -483,8 +546,11 @@ function addPORow(name = '', qty = 1, unit = 'pcs', price = '', note = '', produ
 function toggleBoxOpts(i) {
     const unit = document.getElementById('unit' + i)?.value;
     const pid  = document.getElementById('pid' + i)?.value;
-    const box  = document.getElementById('box-opts-' + i);
-    if (box) box.style.display = (unit === 'box' && !pid) ? '' : 'none';
+    const isNew = !pid;
+    const picker = document.getElementById('type-picker-' + i);
+    if (picker) picker.style.display = isNew ? '' : 'none';
+    const box = document.getElementById('box-opts-' + i);
+    if (box) box.style.display = (unit === 'box' && isNew) ? '' : 'none';
 }
 
 function removeRow(id) {
@@ -492,6 +558,48 @@ function removeRow(id) {
     if (!document.getElementById('poRows').children.length)
         document.getElementById('noRowsMsg').style.display = '';
 }
+
+// ── PO currency toggle (estimated price) ─────────────────────────────────────
+const PO_RATE = <?= EXCHANGE_RATE ?>;
+
+function poToggleCur(i, newCur) {
+    const inp = document.getElementById('eprice'+i);
+    if (!inp) return;
+    const oldCur = inp.dataset.cur || 'usd';
+    if (oldCur === newCur) return;
+    const val = parseFloat(inp.value) || 0;
+    if (newCur === 'lbp' && val > 0) { inp.value = Math.round(val * PO_RATE); inp.step = '1'; }
+    else if (newCur === 'usd' && val > 0) { inp.value = (val / PO_RATE).toFixed(4); inp.step = '0.0001'; }
+    inp.dataset.cur = newCur;
+    const uBtn = document.getElementById(`eprice-usd-${i}`);
+    const lBtn = document.getElementById(`eprice-lbp-${i}`);
+    if (uBtn) { uBtn.classList.toggle('opacity-50', newCur!=='usd'); uBtn.style.fontWeight = newCur==='usd'?'bold':''; }
+    if (lBtn) { lBtn.classList.toggle('opacity-50', newCur!=='lbp'); lBtn.style.fontWeight = newCur==='lbp'?'bold':''; }
+    poUpdateHint(i);
+}
+
+function poUpdateHint(i) {
+    const inp  = document.getElementById('eprice'+i);
+    const hint = document.getElementById('eprice-hint-'+i);
+    if (!inp || !hint) return;
+    const val = parseFloat(inp.value) || 0;
+    const cur = inp.dataset.cur || 'usd';
+    if (!val) { hint.textContent = ''; return; }
+    hint.textContent = cur === 'lbp'
+        ? '≈ $' + (val/PO_RATE).toFixed(2)
+        : '≈ L£ ' + Math.round(val*PO_RATE).toLocaleString();
+}
+
+// Convert LBP estimated_price to USD before PO form submit
+document.querySelector('form[action=""]')?.addEventListener('submit', function() {
+    document.querySelectorAll('[id^="eprice"]').forEach(inp => {
+        if ((inp.dataset.cur||'usd') === 'lbp') {
+            const val = parseFloat(inp.value)||0;
+            if (val > 0) inp.value = (val/PO_RATE).toFixed(4);
+            inp.dataset.cur = 'usd';
+        }
+    });
+});
 
 // Start with 3 empty rows
 document.addEventListener('DOMContentLoaded', () => { addPORow(); addPORow(); addPORow(); });
@@ -519,11 +627,50 @@ function sendWhatsApp(poId, phone, poNumber) {
 }
 
 // ── Receive PO ──────────────────────────────────────────────────────────────
+function rcvToggleCur(i, field, newCur) {
+    const fieldId = field === 'cost' ? 'rcost'+i : 'rsell'+i;
+    const inp = document.getElementById(fieldId);
+    if (!inp) return;
+    const oldCur = inp.dataset.cur || 'usd';
+    if (oldCur === newCur) return;
+    const val = parseFloat(inp.value) || 0;
+    if (newCur === 'lbp' && val > 0) { inp.value = Math.round(val * PO_RATE); inp.step = '1'; }
+    else if (newCur === 'usd' && val > 0) { inp.value = (val / PO_RATE).toFixed(4); inp.step = '0.0001'; }
+    inp.dataset.cur = newCur;
+    const uBtn = document.getElementById(`r${field}-usd-${i}`);
+    const lBtn = document.getElementById(`r${field}-lbp-${i}`);
+    if (uBtn) { uBtn.classList.toggle('opacity-50', newCur!=='usd'); uBtn.style.fontWeight = newCur==='usd'?'bold':''; }
+    if (lBtn) { lBtn.classList.toggle('opacity-50', newCur!=='lbp'); lBtn.style.fontWeight = newCur==='lbp'?'bold':''; }
+    rcvUpdateHint(i, field);
+    if (field === 'cost') updateRecvTotal();
+}
+
+function rcvUpdateHint(i, field) {
+    const fieldId = field === 'cost' ? 'rcost'+i : 'rsell'+i;
+    const inp  = document.getElementById(fieldId);
+    const hint = document.getElementById(`r${field}-hint-${i}`);
+    if (!inp || !hint) return;
+    const val = parseFloat(inp.value) || 0;
+    const cur = inp.dataset.cur || 'usd';
+    if (!val) { hint.textContent = ''; return; }
+    hint.textContent = cur === 'lbp'
+        ? '≈ $' + (val/PO_RATE).toFixed(2)
+        : '≈ L£ ' + Math.round(val*PO_RATE).toLocaleString();
+}
+
+function getRcvCostUsd(tr) {
+    const inp = tr.querySelector('.recv-cost');
+    if (!inp) return 0;
+    const val = parseFloat(inp.value) || 0;
+    const cur = inp.dataset.cur || 'usd';
+    return cur === 'lbp' ? val / PO_RATE : val;
+}
+
 function updateRecvTotal() {
     let grand = 0;
     document.querySelectorAll('#recvRows tr').forEach(tr => {
         const qty  = parseFloat(tr.querySelector('.recv-qty')?.value  || 0);
-        const cost = parseFloat(tr.querySelector('.recv-cost')?.value || 0);
+        const cost = getRcvCostUsd(tr);
         const line = qty * cost;
         grand += line;
         const lineEl = tr.querySelector('.recv-line');
@@ -585,8 +732,9 @@ function openReceive(poId, poNumber, supplierId) {
                 const isNewBox      = !it.product_id && it.unit === 'box' && parseInt(it.new_product_upb) > 1;
                 const isExistingBox = !!it.product_id && it.unit === 'box' && parseInt(it.units_per_box) > 1;
                 const isAnyBox      = isNewBox || isExistingBox;
+                const isNewProduct  = !it.product_id;
+                const newSrc        = it.new_product_source || 'regular';
                 const upb = isNewBox ? parseInt(it.new_product_upb) : (isExistingBox ? parseInt(it.units_per_box) : 1);
-                // Fallback for existing box: per-unit cost × upb = per-box cost (avoids showing $0.50 for a $6 box)
                 const fallbackCost = isExistingBox
                     ? parseFloat(it.current_cost || 0) * upb
                     : parseFloat(it.current_cost || 0);
@@ -597,13 +745,17 @@ function openReceive(poId, poNumber, supplierId) {
                 tr.innerHTML = `
                     <td>
                         <span class="fw-semibold">${it.product_name}</span>
-                        ${isNewBox      ? `<div class="text-primary small mt-1">📦 New product · ${upb} units/box — will be auto-created</div>` : ''}
+                        ${isNewBox && newSrc === 'consignment' ? `<div class="text-warning small mt-1">📦 Consignment · ${upb} units/box — will be auto-created</div>` : ''}
+                        ${isNewBox && newSrc !== 'consignment' ? `<div class="text-primary small mt-1">📦 New product · ${upb} units/box — will be auto-created</div>` : ''}
+                        ${!isNewBox && isNewProduct && newSrc === 'consignment' ? `<div class="text-warning small mt-1">🔄 Consignment — new product, will be auto-created</div>` : ''}
+                        ${!isNewBox && isNewProduct && newSrc !== 'consignment' ? `<div class="text-primary small mt-1">✓ Regular — new product, will be auto-created</div>` : ''}
                         ${isExistingBox ? `<div class="text-info small mt-1">📦 ${upb} units/box · price per box</div>` : ''}
                         <input type="hidden" name="pitems[${i}][pid]"     value="${it.product_id || ''}">
                         <input type="hidden" name="pitems[${i}][name]"    value="${it.product_name.replace(/"/g,'&quot;')}">
                         <input type="hidden" name="pitems[${i}][unit]"    value="${it.unit || 'pcs'}">
                         <input type="hidden" name="pitems[${i}][new_upb]" value="${isNewBox ? upb : 0}">
                         <input type="hidden" name="pitems[${i}][box_upb]" value="${isExistingBox ? upb : 0}">
+                        <input type="hidden" name="pitems[${i}][new_src]" value="${newSrc}">
                     </td>
                     <td class="text-muted small">${it.unit || it.product_unit || ''}</td>
                     <td class="text-muted">${parseFloat(it.quantity)}</td>
@@ -615,18 +767,28 @@ function openReceive(poId, poNumber, supplierId) {
                         <div class="input-group input-group-sm">
                             <span class="input-group-text">$</span>
                             <input type="number" name="pitems[${i}][cost]" id="rcost${i}" class="form-control form-control-sm recv-cost"
-                                   value="${defaultCost.toFixed(4)}" min="0" step="0.0001"
-                                   oninput="updateRecvTotal()${isAnyBox ? `;updateUnitCost(${i},${upb})` : ''}">
+                                   value="${defaultCost.toFixed(4)}" min="0" step="0.0001" data-cur="usd"
+                                   oninput="updateRecvTotal()${isAnyBox ? `;updateUnitCost(${i},${upb})` : ''}; rcvUpdateHint(${i},'cost')">
+                            <button type="button" id="rcost-usd-${i}" class="btn btn-outline-secondary px-1"
+                                    style="font-size:.6rem;min-width:24px;font-weight:bold" onclick="rcvToggleCur(${i},'cost','usd')">$</button>
+                            <button type="button" id="rcost-lbp-${i}" class="btn btn-outline-secondary px-1 opacity-50"
+                                    style="font-size:.6rem;min-width:24px" onclick="rcvToggleCur(${i},'cost','lbp')">L£</button>
                         </div>
+                        <div id="rcost-hint-${i}" class="text-muted" style="font-size:.6rem"></div>
                         ${isAnyBox ? `<div class="text-muted mt-1" style="font-size:10px" id="ucost${i}">≈ $${(defaultCost/upb).toFixed(4)}/unit</div>` : ''}
                     </td>
                     <td>
                         <div class="input-group input-group-sm">
-                            <span class="input-group-text">$</span>
-                            <input type="number" name="pitems[${i}][sell]" class="form-control form-control-sm"
+                            <input type="number" name="pitems[${i}][sell]" id="rsell${i}" class="form-control form-control-sm"
                                    value="${it.sell_price ? parseFloat(it.sell_price).toFixed(4) : ''}"
-                                   min="0" step="0.0001" placeholder="${isAnyBox ? 'per unit' : 'unchanged'}">
+                                   min="0" step="0.0001" data-cur="usd" placeholder="${isAnyBox ? 'per unit' : 'unchanged'}"
+                                   oninput="rcvUpdateHint(${i},'sell')">
+                            <button type="button" id="rsell-usd-${i}" class="btn btn-outline-secondary px-1"
+                                    style="font-size:.6rem;min-width:24px;font-weight:bold" onclick="rcvToggleCur(${i},'sell','usd')">$</button>
+                            <button type="button" id="rsell-lbp-${i}" class="btn btn-outline-secondary px-1 opacity-50"
+                                    style="font-size:.6rem;min-width:24px" onclick="rcvToggleCur(${i},'sell','lbp')">L£</button>
                         </div>
+                        <div id="rsell-hint-${i}" class="text-muted" style="font-size:.6rem"></div>
                     </td>
                     <td class="recv-line fw-semibold text-success">$0.00</td>
                 `;
@@ -637,13 +799,21 @@ function openReceive(poId, poNumber, supplierId) {
         })
         .catch(() => alert('Could not load PO items. Make sure you are logged in.'));
 }
+
+function convertRecvLbpToUsd() {
+    document.querySelectorAll('#recvRows [data-cur="lbp"]').forEach(inp => {
+        const val = parseFloat(inp.value) || 0;
+        if (val > 0) inp.value = (val / PO_RATE).toFixed(4);
+        inp.dataset.cur = 'usd';
+    });
+}
 </script>
 
 <!-- ── Receive PO Modal ───────────────────────────────────────────────────── -->
 <div class="modal fade" id="receiveModal" tabindex="-1">
 <div class="modal-dialog modal-xl">
 <div class="modal-content">
-<form method="POST">
+<form method="POST" id="recvForm" onsubmit="convertRecvLbpToUsd()">
 <input type="hidden" name="action" value="receive_po">
 <input type="hidden" name="po_id" id="recvPoId">
 <div class="modal-header" style="background:#856404;color:#fff">

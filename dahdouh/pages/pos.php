@@ -77,29 +77,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-            // Customer ledger — net cash received = given minus change returned
+            // Customer balance: net change = -(subtotal-discount) + cash_paid
+            // = -total - creditUse + netCashPaid (credit consumed reduces balance, cash received increases it)
             if ($customerId) {
-                $netCashPaid = $totalGiven - $changeAmt; // excludes change given back
-                $pdo->prepare("UPDATE customers SET balance = balance - ? WHERE id=?")->execute([$total, $customerId]);
-                if ($creditUse > 0) {
-                    $pdo->prepare("UPDATE customers SET balance = balance + ? WHERE id=?")->execute([$creditUse, $customerId]);
-                }
-                if ($netCashPaid > 0) {
-                    $pdo->prepare("UPDATE customers SET balance = balance + ? WHERE id=?")->execute([$netCashPaid, $customerId]);
+                $netCashPaid  = $totalGiven - $changeAmt; // excludes change given back
+                $netBalChange = $total + $creditUse - $netCashPaid;
+                if (abs($netBalChange) > 0.001) {
+                    $pdo->prepare("UPDATE customers SET balance = balance - ? WHERE id=?")->execute([$netBalChange, $customerId]);
                 }
                 $ledgerNote = "Sale #$receipt — Total: " . fmtUSD($total);
                 $pdo->prepare("INSERT INTO customer_ledger (customer_id, sale_id, type, amount, note) VALUES (?,?,?,?,?)")
                     ->execute([$customerId, $saleId, 'sale', -$total, $ledgerNote]);
+                if ($creditUse > 0) {
+                    $pdo->prepare("INSERT INTO customer_ledger (customer_id, sale_id, type, amount, note) VALUES (?,?,?,?,?)")
+                        ->execute([$customerId, $saleId, 'payment', $creditUse, "Store credit applied — #$receipt"]);
+                }
                 if ($netCashPaid > 0) {
                     $pdo->prepare("INSERT INTO customer_ledger (customer_id, sale_id, type, amount, note) VALUES (?,?,?,?,?)")
                         ->execute([$customerId, $saleId, 'payment', $netCashPaid, "Payment for #$receipt"]);
                 }
             }
 
-            // Cash register — net effect on each physical drawer independently
-            if ($method === 'cash') {
-                $netUSD = $paidUSD - $changeUSD;
-                $netLBP = $paidLBP - $changeLBP;
+            // Cash register — record whenever physical cash actually changed hands,
+            // regardless of payment_method label (handles credit+cash combo sales).
+            $netUSD = $paidUSD - $changeUSD;
+            $netLBP = $paidLBP - $changeLBP;
+            if (abs($netUSD) > 0.001 || abs($netLBP) > 0.001) {
                 $cur = ($netUSD != 0 && $netLBP != 0) ? 'BOTH' : ($netLBP != 0 ? 'LBP' : 'USD');
                 logCashEntry($pdo, 'sale', $netUSD, "Sale #$receipt", $saleId, $netLBP, $cur);
             }
@@ -351,8 +354,10 @@ renderNav('pos');
 <!-- Totals -->
 <div class="border-top pt-2 mt-1">
     <div class="d-flex justify-content-between small"><span>Subtotal</span><span id="subtotal-val">$0.00</span></div>
-    <div class="d-flex justify-content-between small mb-1">
-        <span>Discount ($)</span>
+    <div class="d-flex justify-content-between small mb-1 align-items-center">
+        <span id="disc-label">Discount
+            <button type="button" id="disc-toggle" class="btn btn-xs btn-outline-secondary py-0 px-1 ms-1" style="font-size:.7rem;line-height:1.2" onclick="toggleDiscMode()" title="Switch between $ and %">$</button>
+        </span>
         <input type="number" id="discount-input" class="form-control form-control-sm text-end" style="width:90px" value="0" min="0" step="0.01" oninput="renderCart()">
     </div>
     <div id="credit-row" class="d-flex justify-content-between small mb-1 d-none">
@@ -736,8 +741,27 @@ function setItemPrice(id, val) {
     updateTotals(subtotal);
 }
 
+let discPctMode = false;
+function toggleDiscMode() {
+    discPctMode = !discPctMode;
+    const btn = document.getElementById('disc-toggle');
+    const inp = document.getElementById('discount-input');
+    btn.textContent = discPctMode ? '%' : '$';
+    btn.classList.toggle('btn-warning', discPctMode);
+    btn.classList.toggle('btn-outline-secondary', !discPctMode);
+    inp.step = discPctMode ? '0.1' : '0.01';
+    inp.max  = discPctMode ? '100' : '';
+    inp.value = 0;
+    renderCart();
+}
+
+function getDiscountUSD(subtotal) {
+    const val = parseFloat(document.getElementById('discount-input')?.value || 0);
+    return discPctMode ? Math.min(subtotal, subtotal * val / 100) : val;
+}
+
 function updateTotals(subtotal) {
-    const disc   = parseFloat(document.getElementById('discount-input')?.value || 0);
+    const disc   = getDiscountUSD(subtotal);
     const credit = parseFloat(document.getElementById('credit-input')?.value || 0);
     const maxCred = parseFloat(document.getElementById('credit-input')?.max || 0);
     const creditUsed = Math.min(credit, maxCred, subtotal - disc);
@@ -923,7 +947,9 @@ function prepareSubmit() {
         name: v.name, price: v.price, qty: v.qty, cost: v.cost, type: v.type
     }));
     document.getElementById('cart-json').value   = JSON.stringify(cartPayload);
-    document.getElementById('hd-discount').value = document.getElementById('discount-input')?.value || 0;
+    // Always submit dollar discount, even when input is in % mode
+    const subtotalNow = Object.values(cart).reduce((s, i) => s + i.price * i.qty, 0);
+    document.getElementById('hd-discount').value = getDiscountUSD(subtotalNow).toFixed(2);
     document.getElementById('hd-credit').value   = document.getElementById('credit-input')?.value || 0;
     document.getElementById('hd-customer').value = document.getElementById('customer_id_val')?.value || '';
     return true;

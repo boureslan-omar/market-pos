@@ -298,7 +298,8 @@ alertBox($message);
         <td class="small"><?= date('d/m/Y H:i', strtotime($row['created_at'])) ?></td>
         <td><?php
             $badges = ['opening'=>'bg-secondary','sale'=>'bg-primary','withdrawal'=>'bg-danger',
-                       'deposit'=>'bg-success','void'=>'bg-warning text-dark','expense'=>'bg-warning text-dark'];
+                       'deposit'=>'bg-success','void'=>'bg-warning text-dark','expense'=>'bg-warning text-dark',
+                       'refund'=>'bg-danger'];
             echo '<span class="badge ' . ($badges[$row['type']] ?? 'bg-secondary') . '">'
                . ucfirst(str_replace('_',' ',$row['type'])) . '</span>';
         ?></td>

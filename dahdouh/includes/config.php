@@ -3,6 +3,8 @@ date_default_timezone_set('Asia/Beirut');
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 
+require_once __DIR__ . '/license.php';
+
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
 define('DB_PASS', '');
@@ -67,6 +69,7 @@ function requireRole(string ...$roles): void {
         $redirect = urlencode($_SERVER['REQUEST_URI'] ?? '/dahdouh/');
         header('Location: /dahdouh/login.php?redirect=' . $redirect); exit;
     }
+    checkLicense(); // machine-locked license check (cached in session)
     if (!empty($roles) && !userCan(...$roles)) {
         http_response_code(403);
         $user = currentUser();

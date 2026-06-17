@@ -3,6 +3,10 @@ dahdouh/*.log
 dahdouh/backup_cron.log
 dahdouh/auto_update.log
 
+# Developer tools — never deploy to clients
+dahdouh/tools/
+dahdouh/license.lic
+
 # Claude Code config (developer tool, not part of the system)
 dahdouh/.claude/
 
@@ -12,6 +16,9 @@ dahdouh/TESTING_CHECKLIST.md
 
 # Backup files created by the system
 dahdouh/backups/
+
+# Release zips (uploaded to GitHub Releases, not committed)
+*.zip
 
 # OS files
 Thumbs.db

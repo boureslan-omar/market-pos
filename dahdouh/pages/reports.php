@@ -47,17 +47,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'void_
                 }
             }
 
-            // Reverse customer balance if sale had a customer
+            // Reverse customer balance if sale had a customer.
+            // Must reverse exactly what pos.php did: -(total + creditUse - netCashPaid).
+            // Cash register void entry handles physical cash; only balance-based credit/debit here.
             if ($sale['customer_id']) {
-                $pdo->prepare("UPDATE customers SET balance = balance + ? WHERE id=?")->execute([$sale['total'], $sale['customer_id']]);
-                $pdo->prepare("INSERT INTO customer_ledger (customer_id, sale_id, type, amount, note) VALUES (?,?,'adjustment',?,'Void of sale #?')")
-                    ->execute([$sale['customer_id'], $vid, $sale['total'], $sale['receipt_no']]);
+                $vNetCashUSD  = (float)$sale['paid_usd'] - (float)$sale['change_usd'];
+                $vNetCashLBP  = (float)$sale['paid_lbp'] - (float)$sale['change_lbp'];
+                $vRate        = max(1, (float)($sale['exchange_rate_used'] ?? EXCHANGE_RATE));
+                $vCreditUsed  = (float)($sale['credit_used'] ?? 0);
+                $vNetCashUSD += $vNetCashLBP / $vRate;
+                $vBalRestore  = (float)$sale['total'] + $vCreditUsed - $vNetCashUSD;
+                if (abs($vBalRestore) > 0.001) {
+                    $pdo->prepare("UPDATE customers SET balance = balance + ? WHERE id=?")->execute([$vBalRestore, $sale['customer_id']]);
+                    $pdo->prepare("INSERT INTO customer_ledger (customer_id, sale_id, type, amount, note) VALUES (?,?,'adjustment',?,?)")
+                        ->execute([$sale['customer_id'], $vid, $vBalRestore, 'Void of sale #' . $sale['receipt_no']]);
+                }
             }
 
-            // Reverse cash register — undo net effect on each drawer
-            if ($sale['payment_method'] === 'cash') {
-                $netUSD = (float)$sale['paid_usd'] - (float)$sale['change_usd'];
-                $netLBP = (float)$sale['paid_lbp'] - (float)$sale['change_lbp'];
+            // Reverse cash register — undo net effect on each drawer.
+            // Check net cash actually paid, not payment_method label (credit+cash sales
+            // may have payment_method='credit' but still have physical cash recorded).
+            $netUSD = (float)$sale['paid_usd'] - (float)$sale['change_usd'];
+            $netLBP = (float)$sale['paid_lbp'] - (float)$sale['change_lbp'];
+            if (abs($netUSD) > 0.001 || abs($netLBP) > 0.001) {
                 $cur = ($netUSD != 0 && $netLBP != 0) ? 'BOTH' : ($netLBP != 0 ? 'LBP' : 'USD');
                 logCashEntry($pdo, 'void', -$netUSD, 'Void of sale #' . $sale['receipt_no'], $vid, -$netLBP, $cur);
             }

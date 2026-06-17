@@ -53,6 +53,7 @@ function renderNav($active = '') {
         'suppliers'      => ['icon'=>'bi-people',           'label'=>'Suppliers',        'url'=>'/dahdouh/pages/suppliers.php',           'roles'=>['admin','stock']],
         'amenities'      => ['icon'=>'bi-boxes',            'label'=>'Amenities',        'url'=>'/dahdouh/pages/amenities.php',           'roles'=>['admin','stock']],
         'purchase_orders'=> ['icon'=>'bi-clipboard-check',  'label'=>'Purchase Orders',  'url'=>'/dahdouh/pages/purchase_orders.php',     'roles'=>['admin','stock']],
+        'returns'        => ['icon'=>'bi-arrow-return-left','label'=>'Returns',          'url'=>'/dahdouh/pages/returns.php',             'roles'=>['admin','cashier','stock']],
         'users'          => ['icon'=>'bi-people-fill',      'label'=>'Users',            'url'=>'/dahdouh/pages/users.php',               'roles'=>['admin']],
         'settings'       => ['icon'=>'bi-gear',             'label'=>'Settings',         'url'=>'/dahdouh/pages/settings.php',            'roles'=>['admin']],
         'backup'         => ['icon'=>'bi-cloud-arrow-up',   'label'=>'Backup',           'url'=>'/dahdouh/pages/backup.php',              'roles'=>['admin']],

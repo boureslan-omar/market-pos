@@ -213,11 +213,13 @@ alertBox($message);
                 </select>
             </div>
             <div class="col-md-6">
-                <label class="form-label small fw-bold mb-1">Supplier Cost / Unit (USD) *</label>
+                <label class="form-label small fw-bold mb-1">Supplier Cost / Unit *</label>
                 <div class="input-group input-group-sm">
-                    <span class="input-group-text">$</span>
-                    <input type="number" name="consignment_cost" id="f_cons_cost" class="form-control" step="0.0001" min="0" placeholder="What supplier charges per unit">
+                    <input type="number" name="consignment_cost" id="f_cons_cost" class="form-control" step="0.0001" min="0" placeholder="What supplier charges per unit" data-cur="usd" oninput="prodUpdateHint('f_cons_cost')">
+                    <button type="button" id="f_cons_cost_usd" class="btn btn-outline-secondary px-1" style="font-size:.65rem;font-weight:bold" onclick="prodToggleCur('f_cons_cost','usd')">USD</button>
+                    <button type="button" id="f_cons_cost_lbp" class="btn btn-outline-secondary px-1 opacity-50" style="font-size:.65rem" onclick="prodToggleCur('f_cons_cost','lbp')">LBP</button>
                 </div>
+                <div id="f_cons_cost_hint" class="form-text text-muted"></div>
                 <div class="form-text">This amount goes to the supplier when sold.</div>
             </div>
         </div>
@@ -251,10 +253,13 @@ alertBox($message);
         </div>
         <div class="col-md-4">
             <label class="form-label">Category</label>
-            <select name="category_id" id="f_cat" class="form-select">
-                <option value="">— None —</option>
-                <?php foreach ($categories as $c): ?><option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['name']) ?></option><?php endforeach; ?>
-            </select>
+            <div class="input-group">
+                <select name="category_id" id="f_cat" class="form-select">
+                    <option value="">— None —</option>
+                    <?php foreach ($categories as $c): ?><option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['name']) ?></option><?php endforeach; ?>
+                </select>
+                <button type="button" class="btn btn-outline-secondary" onclick="openNewCatModal('f_cat')" title="New category"><i class="bi bi-plus-lg"></i></button>
+            </div>
         </div>
         <div class="col-md-4">
             <label class="form-label">Supplier</label>
@@ -275,16 +280,29 @@ alertBox($message);
             </select>
         </div>
         <!-- Regular unit pricing (hidden when unit=box) -->
-        <div class="col-md-4" id="row-cost"><label class="form-label">Cost Price (USD)</label><input type="number" name="cost_price" id="f_cost" class="form-control" step="0.0001" min="0"></div>
+        <div class="col-md-4" id="row-cost">
+            <label class="form-label">Cost Price</label>
+            <div class="input-group">
+                <input type="number" name="cost_price" id="f_cost" class="form-control" step="0.0001" min="0" data-cur="usd" oninput="calcMargin(); prodUpdateHint('f_cost')">
+                <button type="button" id="f_cost_usd" class="btn btn-outline-secondary btn-sm px-1" style="font-size:.7rem;min-width:36px;font-weight:bold" onclick="prodToggleCur('f_cost','usd')" title="USD">USD</button>
+                <button type="button" id="f_cost_lbp" class="btn btn-outline-secondary btn-sm px-1 opacity-50" style="font-size:.7rem;min-width:36px" onclick="prodToggleCur('f_cost','lbp')" title="LBP">LBP</button>
+            </div>
+            <div id="f_cost_hint" class="form-text text-muted"></div>
+        </div>
         <div class="col-md-4" id="row-sell">
             <label class="form-label d-flex justify-content-between align-items-center flex-wrap gap-1">
-                <span id="sell-label">Sell Price / Unit (USD)</span>
+                <span id="sell-label">Sell Price / Unit</span>
                 <span class="form-check form-check-inline mb-0">
                     <input class="form-check-input" type="checkbox" id="use-margin" onchange="toggleMarginMode()">
                     <label class="form-check-label small text-muted fw-normal" for="use-margin">Set by margin %</label>
                 </span>
             </label>
-            <input type="number" name="sell_price" id="f_sell" class="form-control" step="0.0001" min="0" oninput="calcMargin()">
+            <div class="input-group">
+                <input type="number" name="sell_price" id="f_sell" class="form-control" step="0.0001" min="0" data-cur="usd" oninput="calcMargin(); prodUpdateHint('f_sell')">
+                <button type="button" id="f_sell_usd" class="btn btn-outline-secondary btn-sm px-1" style="font-size:.7rem;min-width:36px;font-weight:bold" onclick="prodToggleCur('f_sell','usd')" title="USD">USD</button>
+                <button type="button" id="f_sell_lbp" class="btn btn-outline-secondary btn-sm px-1 opacity-50" style="font-size:.7rem;min-width:36px" onclick="prodToggleCur('f_sell','lbp')" title="LBP">LBP</button>
+            </div>
+            <div id="f_sell_hint" class="form-text text-muted"></div>
             <div id="sell-calc-preview" class="form-text text-muted" style="display:none"></div>
         </div>
         <div class="col-md-4" id="row-margin">
@@ -425,6 +443,9 @@ function clearForm() {
     document.getElementById('margin-preview').textContent = '—';
     document.getElementById('box-margin-preview').textContent = '—';
     resetMarginModes();
+    prodResetCur('f_cost');
+    prodResetCur('f_sell');
+    prodResetCur('f_cons_cost');
     toggleType();
     toggleSource();
 }
@@ -450,6 +471,9 @@ function fillForm(p) {
     document.getElementById('f_cost_box').value  = (p.unit === 'box' && parseFloat(p.cost_price) > 0)
         ? (parseFloat(p.cost_price) * upb).toFixed(4) : '';
     resetMarginModes();
+    prodResetCur('f_cost');
+    prodResetCur('f_sell');
+    prodResetCur('f_cons_cost');
     calcMargin();
     calcBoxPrice();
     toggleType();
@@ -579,6 +603,94 @@ document.getElementById('f_cost')?.addEventListener('input', () => {
 });
 document.getElementById('f_sell')?.addEventListener('input', calcMargin);
 
+// ── Currency toggle (products.php) ───────────────────────────────────────────
+const PROD_RATE = <?= EXCHANGE_RATE ?>;
+
+function prodToggleCur(fieldId, newCur) {
+    const inp = document.getElementById(fieldId);
+    if (!inp) return;
+    const oldCur = inp.dataset.cur || 'usd';
+    if (oldCur === newCur) return;
+    const val = parseFloat(inp.value) || 0;
+    if (newCur === 'lbp' && val > 0) { inp.value = Math.round(val * PROD_RATE); inp.step = '1'; }
+    else if (newCur === 'usd' && val > 0) { inp.value = (val / PROD_RATE).toFixed(4); inp.step = '0.0001'; }
+    inp.dataset.cur = newCur;
+    const uBtn = document.getElementById(fieldId + '_usd');
+    const lBtn = document.getElementById(fieldId + '_lbp');
+    if (uBtn) { uBtn.classList.toggle('opacity-50', newCur !== 'usd'); uBtn.style.fontWeight = newCur==='usd'?'bold':'normal'; }
+    if (lBtn) { lBtn.classList.toggle('opacity-50', newCur !== 'lbp'); lBtn.style.fontWeight = newCur==='lbp'?'bold':'normal'; }
+    prodUpdateHint(fieldId);
+    calcMargin();
+}
+
+function prodUpdateHint(fieldId) {
+    const inp  = document.getElementById(fieldId);
+    const hint = document.getElementById(fieldId + '_hint');
+    if (!inp || !hint) return;
+    const val = parseFloat(inp.value) || 0;
+    const cur = inp.dataset.cur || 'usd';
+    if (!val) { hint.textContent = ''; return; }
+    hint.textContent = cur === 'lbp'
+        ? '≈ $' + (val / PROD_RATE).toFixed(2)
+        : '≈ L£ ' + Math.round(val * PROD_RATE).toLocaleString();
+}
+
+function prodResetCur(fieldId) {
+    const inp = document.getElementById(fieldId);
+    if (inp) { inp.dataset.cur = 'usd'; inp.step = '0.0001'; }
+    const uBtn = document.getElementById(fieldId + '_usd');
+    const lBtn = document.getElementById(fieldId + '_lbp');
+    if (uBtn) { uBtn.classList.remove('opacity-50'); uBtn.style.fontWeight = 'bold'; }
+    if (lBtn) { lBtn.classList.add('opacity-50');    lBtn.style.fontWeight = 'normal'; }
+    const hint = document.getElementById(fieldId + '_hint');
+    if (hint) hint.textContent = '';
+}
+
+// Convert LBP fields to USD before product form submission
+document.querySelector('#productModal form')?.addEventListener('submit', function() {
+    ['f_cost','f_sell','f_cons_cost'].forEach(fieldId => {
+        const inp = document.getElementById(fieldId);
+        if (!inp) return;
+        const cur = inp.dataset.cur || 'usd';
+        const val = parseFloat(inp.value) || 0;
+        if (cur === 'lbp' && val > 0) { inp.value = (val / PROD_RATE).toFixed(4); inp.dataset.cur = 'usd'; }
+    });
+});
+
+// ── New Category modal ────────────────────────────────────────────────────────
+let _newCatTarget = null;
+function openNewCatModal(selectId) {
+    _newCatTarget = selectId;
+    document.getElementById('newCatName').value = '';
+    document.getElementById('newCatError').textContent = '';
+    new bootstrap.Modal(document.getElementById('newCatModal')).show();
+    setTimeout(() => document.getElementById('newCatName').focus(), 300);
+}
+
+function saveNewCategory() {
+    const name = document.getElementById('newCatName').value.trim();
+    if (!name) { document.getElementById('newCatError').textContent = 'Name required.'; return; }
+    fetch('/dahdouh/pages/api.php?action=create_category', {
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body:'name=' + encodeURIComponent(name)
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (!d.ok) { document.getElementById('newCatError').textContent = d.error||'Error'; return; }
+        // Add to ALL category selects on this page
+        document.querySelectorAll('select[name="category_id"]').forEach(sel => {
+            if (!sel.querySelector(`option[value="${d.id}"]`)) {
+                const opt = new Option(d.name, d.id);
+                sel.appendChild(opt);
+            }
+            if (sel.id === _newCatTarget) sel.value = d.id;
+        });
+        bootstrap.Modal.getInstance(document.getElementById('newCatModal'))?.hide();
+    })
+    .catch(() => { document.getElementById('newCatError').textContent = 'Network error'; });
+}
+
 // ── Generate barcode ─────────────────────────────────────────────────────────
 function generateBarcode() {
     fetch('/dahdouh/pages/api.php?action=generate_barcode')
@@ -663,5 +775,20 @@ function viewBatches(productId, productName) {
 </div>
 </div>
 </div>
+
+<!-- New Category Modal -->
+<div class="modal fade" id="newCatModal" tabindex="-1">
+<div class="modal-dialog modal-sm">
+<div class="modal-content">
+    <div class="modal-header py-2"><h6 class="modal-title"><i class="bi bi-tag me-2"></i>New Category</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+        <input type="text" id="newCatName" class="form-control" placeholder="Category name" onkeydown="if(event.key==='Enter'){event.preventDefault();saveNewCategory();}">
+        <div class="text-danger small mt-1" id="newCatError"></div>
+    </div>
+    <div class="modal-footer py-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="saveNewCategory()">Save</button>
+    </div>
+</div></div></div>
 
 <?php renderFoot(); ?>

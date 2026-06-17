@@ -1,9 +1,9 @@
 ================================================================================
-  ZOUGHAIB MARKET — POS SYSTEM
-  Installation & Setup Guide  |  Version 3.0
+  MARKET POS SYSTEM
+  Installation & Setup Guide  |  Version 3.1.0
 ================================================================================
 
-This guide explains how to install and run the mini market POS system on any
+This guide explains how to install and activate the Market POS system on any
 Windows computer from scratch. Follow every step in order.
 
 
@@ -54,9 +54,13 @@ XAMPP is the software package that runs the web server, PHP, and the database.
      C:\xampp\htdocs\dahdouh\
      C:\xampp\htdocs\dahdouh\index.php
      C:\xampp\htdocs\dahdouh\install.sql
+     C:\xampp\htdocs\dahdouh\upgrade_all.php
      C:\xampp\htdocs\dahdouh\includes\
      C:\xampp\htdocs\dahdouh\pages\
      C:\xampp\htdocs\dahdouh\assets\
+
+   IMPORTANT: Do NOT copy the "tools" folder to any client computer.
+   The tools folder is for the developer only.
 
 2. Verify it is in the right place:
      http://localhost/dahdouh/login.php
@@ -87,54 +91,66 @@ METHOD B — MySQL command line:
 
 
 ================================================================================
-  PART 4 — RUN ALL DATABASE UPGRADES (REQUIRED)
+  PART 4 — RUN THE DATABASE UPGRADE (REQUIRED)
 ================================================================================
 
-Six upgrade scripts must be run in order after install.sql. Each is safe to
-re-run — it will skip steps that are already done.
+A single upgrade script handles all database setup. It is safe to run multiple
+times — it checks what is already done and skips those steps automatically.
 
-Open each URL in your browser, click "Run Upgrade", and wait for the success
-message before moving to the next one.
+1. Open in your browser:
+     http://localhost/dahdouh/upgrade_all.php
 
-1. http://localhost/dahdouh/upgrade.php
-   Adds: product_source field, consignment_ledger table, consignment_settlements
-         table, purchase_orders table, purchase_order_items table.
+2. Click "Run Upgrade → v3.1.0"
 
-2. http://localhost/dahdouh/upgrade2.php
-   Adds: suppliers.email, suppliers.balance, supplier_ledger table.
+3. Wait for the green success panel. Every item should show a ✓ checkmark.
 
-3. http://localhost/dahdouh/upgrade3.php
-   Adds:
-     - users table (creates the default admin account)
-     - sales void columns (is_void, void_reason, voided_at, voided_by)
-     - cash_register_log dual-currency columns (amount_lbp, balance_after_lbp,
-       currency)
-     - purchase_orders.received_purchase_id
+4. Click "Back to Dashboard".
 
-4. http://localhost/dahdouh/upgrade4.php
-   Adds:
-     - products.units_per_box (box packaging support)
-     - products.sell_price_box (optional box sell price)
+   If any item shows an error, note the message and contact support.
+   Upgrades already applied on a previous installation are safely skipped.
 
-5. http://localhost/dahdouh/upgrade5.php
-   Adds:
-     - cash_shifts table (End of Shift logging)
-     - Extends cash_register_log.type to support void and expense entry types
 
-6. http://localhost/dahdouh/upgrade6.php
-   Adds:
-     - purchase_items.total column
-     - Makes purchase_items.product_id nullable (required for PO auto-created
-       products)
-     - purchase_order_items.new_product_upb column (units-per-box for new
-       products ordered via PO)
+================================================================================
+  PART 5 — SOFTWARE ACTIVATION (LICENSE)
+================================================================================
 
-After all six finish, go to:
+The software is locked to the computer it is installed on. Each installation
+needs a unique license key from the software provider.
+
+HOW TO ACTIVATE:
+
+1. After completing Parts 1–4, open:
      http://localhost/dahdouh/login.php
 
+   You will be redirected to the activation page automatically.
+
+2. The activation page shows your MACHINE ID — a code like:
+     9EC7-1B70-FDFE-63B9
+
+   This code is unique to this computer. Send it to your software provider
+   (WhatsApp, phone call, or email).
+
+3. The software provider will send you a LICENSE KEY (a long string of text).
+
+4. Paste the license key into the activation page and click "Activate Software".
+
+5. If the key is valid, you will see a success message. Click "Continue to Login".
+
+IMPORTANT NOTES:
+  - The license is tied to this specific computer. If the software is moved
+    to a different PC, a new license key is required.
+  - Each store location needs its own license key.
+  - Keep your license key saved somewhere safe (email, notebook).
+    If you reinstall Windows, you will need it again.
+
+WHAT HAPPENS IF THE LICENSE IS MISSING:
+  - If the license file is deleted or the PC is replaced, the system will
+    show the activation page and ask for the key again.
+  - Contact the software provider with the new Machine ID.
+
 
 ================================================================================
-  PART 5 — FIRST LOGIN & USER SETUP
+  PART 6 — FIRST LOGIN & USER SETUP
 ================================================================================
 
 DEFAULT ADMIN ACCOUNT:
@@ -151,17 +167,17 @@ USER ROLES:
   ADMIN    — Full access to everything, including reports, settings, and users.
              (The owner / manager account.)
 
-  CASHIER  — POS sales, customers, cash register, expenses.
+  CASHIER  — POS sales, customers, cash register, expenses, returns.
              Cannot see purchases, suppliers, or reports.
 
-  STOCK    — Products, purchases, suppliers, amenities, purchase orders, import.
-             Cannot access POS or cash register.
+  STOCK    — Products, purchases, suppliers, amenities, purchase orders, import,
+             returns. Cannot access POS or cash register.
 
 ADDING STAFF ACCOUNTS:
   Log in as admin. Go to Users (in the top navigation bar, admin only).
   Click "Add User". Fill in name, username, password, and select the role.
   Staff log in at: http://localhost/dahdouh/login.php
-  (or the same URL from any device on the same network — see Part 9.)
+  (or the same URL from any device on the same network — see Part 10.)
 
 CONCURRENT USE:
   Multiple staff can be logged in and working at the same time. For example:
@@ -171,7 +187,7 @@ CONCURRENT USE:
 
 
 ================================================================================
-  PART 6 — FIRST-TIME CONFIGURATION
+  PART 7 — FIRST-TIME CONFIGURATION
 ================================================================================
 
 Log in as admin, then go to Settings:
@@ -193,18 +209,17 @@ Click "Save Settings" when done.
 
 
 ================================================================================
-  PART 7 — ADD INITIAL DATA
+  PART 8 — ADD INITIAL DATA
 ================================================================================
 
 Before making sales, set up your products and suppliers.
 
 SUPPLIERS:
   Go to Suppliers → Add each supplier (name, phone, optional email).
-  A "Default Supplier" is created automatically the first time you record a
-  purchase without selecting a supplier.
 
 CATEGORIES:
   Created automatically when you add a product — no separate setup needed.
+  Or go to Products → "Add Category" to create them in advance.
 
 PRODUCTS — Adding one by one:
   Go to Products → "Add Product".
@@ -218,7 +233,7 @@ PRODUCTS — Adding one by one:
     Product Type    — Regular (tracked stock with batches) or Bulk (vegetables,
                       fruit — price per kg, no unit count)
     Source          — Owned (your stock) or Consignment (supplier-owned, sold
-                      on behalf — amenities, etc.)
+                      on behalf — amenities)
     Unit            — pcs / box / kg / g / L / mL
     Cost Price      — What you paid per unit (USD)  [hidden when Unit = box]
     Sell Price/Unit — What you charge per unit (USD) [hidden when Unit = box]
@@ -230,8 +245,11 @@ PRODUCTS — Adding one by one:
     Units per Box   — How many individual items are inside one box
     Cost per Box    — What you pay per box (system auto-calculates cost/unit)
     Sell Price/Box  — What you charge for a full box
-    The per-unit cost and sell price are calculated automatically from the
-    box values and saved in the database for accurate FIFO costing and POS pricing.
+
+  MARGIN CALCULATOR:
+    In the Sell Price field, check "Set by margin %" to enter your desired
+    profit margin percentage instead of a price. The sell price is calculated
+    automatically using: sell = cost ÷ (1 − margin/100).
 
 IMPORTING PRODUCTS FROM EXCEL / CSV:
   Go to Products → "Import XLSX/CSV".
@@ -251,7 +269,7 @@ INITIAL STOCK (if not entered as purchases):
 
 
 ================================================================================
-  PART 8 — DAILY USE
+  PART 9 — DAILY USE
 ================================================================================
 
 MAKING A SALE (POS — Cashier role):
@@ -259,7 +277,7 @@ MAKING A SALE (POS — Cashier role):
   - Click product tiles to add to cart, OR
   - Type / scan a barcode in the search box and press Enter.
   - For bulk products (veg/fruit), a price entry dialog appears.
-  - For products sold in boxes: click the "📦 Box ×N" button on the tile
+  - For products sold in boxes: click the "Box ×N" button on the tile
     to add a full box at the box price.
   - Adjust quantity or price in the cart as needed.
   - Select a customer (optional — for account/debt tracking).
@@ -271,174 +289,143 @@ MAKING A SALE (POS — Cashier role):
   - For Card / Mobile / Account: select the method and confirm — no cash inputs.
   - Click "Complete Sale". A receipt is shown and can be printed.
 
+  STORE CREDIT (Customer Account):
+  If a customer has a positive account balance (they pre-paid or have credit),
+  you can apply it as a "Store Credit" when checking out. The credit is consumed
+  from their account and the remaining total is charged normally.
+
   VOIDING A SALE (Admin only):
   Go to Reports → find the sale in the transaction list → click "Void".
-  Enter a reason. Stock is restored, customer balance is reversed, and the
-  cash drawer is corrected automatically.
+  Enter a reason. Stock is restored, customer balance is fully reversed
+  (including any store credit that was used), and the cash drawer is
+  corrected automatically.
 
 PURCHASES (Stock role):
   Go to Purchases → "New Purchase".
-  - Supplier is required. Select from the dropdown. If no supplier exists yet,
-    a "Default Supplier" is used automatically.
-  - Add each product line: search for a product, enter quantity and unit cost.
-  - For products with box packaging, a "# boxes" and "$/box" helper appears —
-    fill in the number of boxes and cost per box, and the system computes unit
-    quantity and unit cost automatically.
-  - Choose a Payment Method:
+  - Supplier is required. Select from the dropdown.
+  - Add each product line: search for a product, select the ROW TYPE, then
+    enter quantity and unit cost.
 
-      Deduct from Cash Register
-        Amount is withdrawn from the USD drawer automatically. Supplier balance
-        is set to zero (paid on the spot). Withdrawal appears in cash register log.
+  ROW TYPES (select per product line):
+    Regular     — Standard owned inventory. Supplier balance is charged.
+                  Stock batch created for FIFO tracking.
+    Consignment — Supplier-owned goods. Supplier balance is NOT charged.
+                  Stock is tracked. Payment to supplier happens later through
+                  Amenities when the goods are sold.
+    Bulk        — Bulk/weight-based goods (no unit count).
 
-      Owner Paid Cash
-        You (the owner) paid from your own pocket. The amount is recorded as a
-        deposit to the cash register so it appears in the financial records.
-        Supplier balance is set to zero.
+  - For box products, a "# boxes" and "$/box" helper appears.
+  - The "Amount Due" total only includes Regular items.
+    Consignment items are shown separately and excluded from payment.
 
-      Pay Later
-        No cash movement. The purchase amount is added to the supplier's
-        outstanding balance and appears in the Suppliers tab.
+  PAYMENT METHODS (apply to Regular items only):
+    Deduct from Cash Register  — USD drawer deducted. Supplier balance zeroed.
+    Owner Paid Cash            — Recorded as deposit to register. Balance zeroed.
+    Pay Later                  — No cash movement. Balance added to supplier tab.
 
-  - Click "Save Purchase". Stock batches are updated; supplier ledger is recorded.
+  - Click "Save Purchase". Stock updated; supplier ledger recorded.
 
 PURCHASE ORDERS (Stock role):
   Go to Purchase Orders → "New PO".
   Create an order to send to a supplier. Fill in the supplier, expected delivery
   date, and add each item with its quantity and estimated price.
 
-  NEW PRODUCTS VIA PO (box items not yet in the system):
-    When adding an item line with no product selected and Unit = Box, a
-    "Units per Box" input appears. Fill in how many units are in one box.
-    When the PO is received, the system automatically creates the product,
-    sets the correct cost per unit, and adds the stock batch. No separate
-    product creation step is needed.
-
-  VIEWING AND SHARING A PO:
-  - Click the printer icon to open the print-ready PO view page.
-  - Click "Print PDF" to open the browser print dialog — choose "Save as PDF".
-  - Click "Send via WhatsApp" to:
-      Step 1: The print dialog opens automatically — save the file as PDF.
-      Step 2: After 1.5 seconds WhatsApp opens pre-filled with a short message.
-      Attach the saved PDF in WhatsApp and send.
-
   STATUS TRACKING:
-  Use the status dropdown on each PO row to track progress:
+  Use the status dropdown on each PO row:
     Draft → Sent → Confirmed → Cancelled   (all update immediately)
-  Selecting "Received" from the dropdown opens the Receive modal (same as
-  clicking the Receive button) — it does NOT silently mark it as received.
+  Selecting "Received" opens the Receive modal.
 
   RECEIVING A PO (when goods arrive):
-  Click the "Receive" button (or change status to Received) on any open PO.
-  A modal appears with all ordered items and the following editable fields:
-    - Received Qty    — adjust if supplier delivered partial or extra quantities
-    - Cost / Unit     — enter the actual invoice cost (pre-filled with estimate)
-                        For box products: cost is shown per box; system converts
-                        to per-unit cost automatically
-    - Sell Price/Unit — optionally update the product's selling price
-                        (leave blank to keep the current price unchanged)
-  The Grand Total updates live as you type.
+  Click the "Receive" button on any open PO. A modal shows all ordered items.
+  Edit received quantities, actual costs, and optional sell prices.
+  Choose how the delivery was paid (Cash USD/LBP, Bank Transfer, or Pay Later).
+  Click "Commit Receipt & Update Stock" to complete.
 
-  PAYMENT SETTLEMENT (at the bottom of the receive modal):
-  Choose how this delivery was paid for:
-    - Cash (USD)      — withdrawn from USD drawer; supplier balance settled
-    - Cash (LBP)      — withdrawn from LBP drawer; ledger note in LBP
-    - Bank Transfer   — balance settled; no cash drawer change
-    - Pay Later       — no payment now; amount shows as outstanding in Suppliers
-
-  Click "Commit Receipt & Update Stock" to:
-    - Create a full Purchase record linked to this PO
-    - Update stock for each product (FIFO batch logic applied)
-    - Update sell prices where entered
-    - Update the supplier's balance and ledger
-    - Log cash drawer movement if paid now
-    - Mark the PO as Received
+  SHARING A PO:
+  - Click the print icon to open the print-ready PO view.
+  - Click "Send via WhatsApp" to generate the PDF and send it via WhatsApp.
 
 SUPPLIERS:
-  Go to Suppliers → click a supplier name to see:
-  - Current balance (how much you owe them — positive = you owe)
-  - Full transaction ledger (red = purchase/debt, green = payment)
-  - Record a payment using the Pay Supplier form
+  Go to Suppliers → click a supplier name to see their balance and ledger.
 
   PAYING A SUPPLIER:
-  The form pre-fills with the outstanding balance (in both USD and LBP).
-  Choose a payment method from the dropdown:
-    - Cash (USD)      — withdrawn from USD drawer; balance decreases
-    - Cash (LBP)      — withdrawn from LBP drawer; balance note in LBP
-    - Bank Transfer   — balance decreases; no drawer change
+  Use the "Pay Supplier" form on the supplier detail page.
+  Choose: Cash USD (from drawer), Cash LBP (from LBP drawer), or Bank Transfer.
+
+CUSTOMERS:
+  Go to Customers → view balance, ledger history, and customer returns.
+
+  CUSTOMER BALANCE:
+    Positive balance = store owes the customer (they pre-paid / have credit).
+    Negative balance = customer owes the store (they bought on account).
+
+  Balances are automatically updated on every sale, void, return, and payment.
 
 AMENITIES / CONSIGNMENT:
   Products sold on behalf of a supplier. Go to Amenities to see per-supplier
   stock, sales, and profit by date range.
 
-  Stock is tracked per-supplier. Each sale automatically logs how much is owed
-  to the supplier (supplier due) and your market cut.
-
   SETTLING WITH A CONSIGNMENT SUPPLIER:
   Click a supplier in the left panel → use the "Pay Supplier" form.
-  The outstanding balance is calculated as total sales due minus all previous
-  payments — partial payments are fully supported and correctly reduce the
-  displayed outstanding amount.
+  Choose: Cash Register (USD), Owner Cash, or Bank Transfer.
 
-  Choose a payment method:
-    - Deduct from Cash Register (USD) — withdrawn from USD drawer
-    - Owner Paid Cash                 — recorded as deposit to register
-    - Bank Transfer                   — no cash drawer change
+RETURNS:
+  Go to Returns (available to Admin, Cashier, and Stock roles).
 
-  CONSIGNMENT REPORTS:
-  Go to Amenities → Reports tab for revenue, supplier due, and your market cut
-  by supplier or product for any date range.
+  CUSTOMER RETURNS (customer brings an item back):
+  - Switch to the "Customer Returns" tab.
+  - Enter the original receipt number and click Search.
+  - The sale items appear. Enter the quantity to return and confirm.
+  - The refund is deducted from the cash register (USD drawer).
+  - Stock is restored to the product.
+
+  SUPPLIER RETURNS (sending goods back to supplier):
+  - Switch to the "Supplier Returns" tab.
+  - Search for the product batch to return.
+  - Enter quantity and a note. Confirm.
+  - The supplier's balance is credited by the return amount.
+  - Batch quantity is restored.
 
 REPORTS (Admin only):
-  Date range filter (Today / This Month / custom).
-  Shows: revenue, cost of goods, gross profit, expenses, net profit.
-  Lists every transaction with items, with a Void button on each.
+  Date range filter. Shows revenue, cost of goods, gross profit, expenses,
+  net profit. Lists every transaction with items and a Void button.
 
 CASH REGISTER (Admin / Cashier):
   Two separate drawers tracked: USD and LBP.
-  - Set opening balance for each drawer at the start of the day.
-  - The register log shows every movement with running balance for each drawer.
 
   WHAT UPDATES THE DRAWERS AUTOMATICALLY:
-    Cash sales (USD / LBP)         → add to the matching drawer
-    Purchase paid from register    → deducted from USD drawer
-    Owner paid cash for purchase   → recorded as deposit to USD drawer
-    PO received with cash payment  → deducted from the selected drawer
-    Supplier payment (USD cash)    → deducted from USD drawer
-    Supplier payment (LBP cash)    → deducted from LBP drawer
-    Consignment settlement (cash)  → deducted from USD drawer
-    Consignment owner payment      → recorded as deposit to USD drawer
-    Expense (USD)                  → deducted from USD drawer
-    Expense (LBP)                  → deducted from LBP drawer
-    Void of cash sale              → reverses the original drawer movement
+    Cash sales (USD / LBP)          → added to the matching drawer
+    Customer refunds (returns)       → deducted from USD drawer
+    Void of cash sale               → reverses the original drawer movement
+    Purchase from register          → deducted from USD drawer
+    Owner paid cash for purchase    → recorded as deposit to USD drawer
+    PO received with cash payment   → deducted from the selected drawer
+    Supplier payment (USD cash)     → deducted from USD drawer
+    Supplier payment (LBP cash)     → deducted from LBP drawer
+    Consignment settlement (cash)   → deducted from USD drawer
+    Consignment owner payment       → recorded as deposit to USD drawer
+    Expense (USD) with cash deduct  → deducted from USD drawer
+    Expense (LBP) with cash deduct  → deducted from LBP drawer
 
-  END OF SHIFT: click the "End of Shift" button to log a snapshot of current
-  balances and shift activity. Balances are NOT reset — this is for records.
-  A shift history table at the bottom shows all past shift snapshots.
+  END OF SHIFT: click "End of Shift" to log a snapshot of current balances
+  and shift activity. Balances are NOT reset — shift history is for records.
 
 EXPENSES (Admin / Cashier):
   Record non-inventory costs (rent, electricity, wages, etc.).
   These are subtracted from gross profit in the reports.
-
-  - Enter description, amount, category, and date.
   - Select "Deduct from cash register" if the money came from a physical drawer.
-  - Select the currency of the amount:
-      USD drawer — enter the amount in US dollars
-      LBP drawer — enter the amount in Lebanese pounds
-                   The system automatically converts to the USD equivalent
-                   (using the current exchange rate from Settings) and stores
-                   it correctly. The original LBP amount is saved in the note.
+  - USD expenses deduct from the USD drawer; LBP expenses deduct from the LBP drawer.
 
 BARCODE PRINTING (Admin / Stock):
   Go to Products → select products (checkboxes) → click "Print Barcodes".
-  Set how many labels to print per product, then print.
 
 USER MANAGEMENT (Admin only):
   Go to the Users page (top-right menu).
-  Add, edit, or deactivate staff accounts. You cannot delete your own account.
+  Add, edit, or deactivate staff accounts.
 
 
 ================================================================================
-  PART 9 — ACCESSING FROM OTHER DEVICES ON THE NETWORK
+  PART 10 — ACCESSING FROM OTHER DEVICES ON THE NETWORK
 ================================================================================
 
 The system runs on one computer (the XAMPP machine). Other devices on the
@@ -457,40 +444,73 @@ No internet required — everything is on your local network.
 
 TIP: Set a static (fixed) IP address on the server PC so the address never
 changes between restarts. This prevents staff from losing access every morning.
-To set a static IP: Windows Settings → Network → your Wi-Fi adapter →
-IP Settings → Manual → enter your chosen IP, subnet mask, and gateway.
 
 
 ================================================================================
-  PART 10 — BACKUPS
+  PART 11 — BACKUPS
 ================================================================================
 
-DATABASE BACKUP (most important — do this daily or weekly):
-  Go to: http://localhost/phpmyadmin/
-  Click "pos_minimarket" in the left sidebar.
-  Click "Export" → "Go". This downloads a .sql file.
-  Save it to a USB drive or cloud storage.
+The system has a built-in backup feature. Go to:
+     http://localhost/dahdouh/pages/backup.php
 
-FILES BACKUP:
-  Copy C:\xampp\htdocs\dahdouh\ to a safe location (includes logo, assets, etc.).
+Click "Backup Now" to create a full backup (database + files) in one step.
+Backups are saved to: C:\Users\Public\Documents\MarketBackup\
+(or the folder configured in Settings → Backup Folder)
+
+AUTOMATIC NIGHTLY BACKUP:
+Run this once in Command Prompt as Administrator to schedule a daily backup:
+  schtasks /create /tn "MarketPOS_Backup" /tr "\"C:\xampp\php\php.exe\" \"C:\xampp\htdocs\dahdouh\backup_cron.php\"" /sc daily /st 02:00 /ru SYSTEM /f
+
+GOOGLE DRIVE SYNC (optional):
+Install Google Drive Desktop. Set the backup folder in Settings to your
+Google Drive path (e.g. G:\My Drive\MarketBackup). Every backup syncs to cloud.
 
 RESTORING FROM BACKUP:
-  1. Install XAMPP and copy the dahdouh folder back to htdocs\.
-  2. Open phpMyAdmin → SQL → paste the .sql backup content → Go.
-  3. Run all six upgrade scripts again (they skip steps already done):
-       upgrade.php → upgrade2.php → upgrade3.php → upgrade4.php
-       → upgrade5.php → upgrade6.php
+1. Install XAMPP and copy the dahdouh folder back to htdocs\.
+2. Open phpMyAdmin → SQL → paste the .sql backup content → Go.
+3. Open http://localhost/dahdouh/upgrade_all.php and run the upgrade.
+4. Open the activation page and enter your license key.
 
 
 ================================================================================
-  PART 11 — TROUBLESHOOTING
+  PART 12 — UPGRADING FROM AN OLDER VERSION
 ================================================================================
 
-PROBLEM: Goes to login page but login fails.
+If this computer already has an older version of the POS installed:
+
+1. Back up the database first (Part 11).
+
+2. Replace all files in C:\xampp\htdocs\dahdouh\ with the new version.
+   (You can delete all old files and copy the new ones fresh.)
+
+3. Run the combined upgrade:
+     http://localhost/dahdouh/upgrade_all.php
+
+   This script detects what is already installed and only applies what is new.
+   It is safe to run even if some upgrades were already applied before.
+
+4. If the activation page appears, your license.lic file was not carried over.
+   Find your saved license key and re-enter it. Or contact the software provider
+   with your Machine ID for a replacement.
+
+
+================================================================================
+  PART 13 — TROUBLESHOOTING
+================================================================================
+
+PROBLEM: Goes to activation page instead of login.
+SOLUTION: The software needs to be activated on this machine. Follow Part 5.
+          If you already activated before, your license.lic file may have been
+          deleted. Contact your software provider with the Machine ID shown.
+
+PROBLEM: "Invalid license key" on activation.
+SOLUTION: Make sure you copied the full key exactly — it is a long string.
+          The key is specific to this machine's Machine ID. A key generated
+          for a different PC will not work here.
+
+PROBLEM: Login fails with correct credentials.
 SOLUTION: Default credentials are admin / admin123 (case-sensitive).
-          If you changed it and forgot, go to phpMyAdmin → pos_minimarket →
-          users table → edit the admin row → set password to:
-          $2y$12$... (you need to generate a new hash via PHP — contact support).
+          If you changed it and forgot, contact support.
 
 PROBLEM: "Access denied" or 403 page.
 SOLUTION: You are logged in with a role that cannot access that page.
@@ -501,10 +521,14 @@ SOLUTION: Make sure Apache and MySQL are both Running (green) in XAMPP.
           Verify the dahdouh folder is inside C:\xampp\htdocs\.
 
 PROBLEM: Database error on first visit.
-SOLUTION: Run Part 3 (Create Database) and Part 4 (All Upgrades).
+SOLUTION: Run Part 3 (Create Database) and Part 4 (Upgrade).
 
 PROBLEM: "Error loading batches" or similar API error.
-SOLUTION: Make sure all six upgrade scripts in Part 4 have been run.
+SOLUTION: Make sure upgrade_all.php has been run (Part 4).
+
+PROBLEM: Customer balance seems wrong (too high after a credit sale).
+SOLUTION: Run upgrade_all.php — this includes a one-time data correction
+          for a balance calculation bug that existed in versions before 3.1.0.
 
 PROBLEM: Date or time on receipts is wrong.
 SOLUTION: The system is set to Lebanon time (Asia/Beirut). If you are in a
@@ -522,23 +546,17 @@ SOLUTION: Click the search box first to give it focus, then scan.
           USB barcode scanners act as keyboards — they type the barcode + Enter.
 
 PROBLEM: Exchange rate is wrong on receipts or LBP prices are incorrect.
-SOLUTION: Go to Settings → update the Exchange Rate field. This updates
-          all LBP displays, expense conversions, and PO settlement amounts
-          across the entire system immediately.
+SOLUTION: Go to Settings → update the Exchange Rate field.
 
 PROBLEM: Apache port conflict (red error in XAMPP).
 SOLUTION: See the note at the bottom of Part 1.
 
-PROBLEM: Consignment outstanding balance shows $0 even after a partial payment.
-SOLUTION: This is fixed in the current version. Outstanding balance is now
-          calculated as total sales due minus total payments made (not based
-          on individual row flags). Make sure upgrade6.php has been run.
+PROBLEM: Consignment amount due to supplier is wrong.
+SOLUTION: The outstanding balance is calculated as total sales due minus all
+          previous payments. Make sure upgrade_all.php has been run.
 
-PROBLEM: LBP expense shows as a huge USD amount in the expense list.
-SOLUTION: This is fixed in the current version. When LBP drawer is selected,
-          the system now treats the entered amount as LBP and converts to USD
-          automatically. Make sure you are running the latest version of
-          pages/expenses.php.
+PROBLEM: Customer return not deducting from cash register.
+SOLUTION: This is fixed in v3.1.0. Make sure upgrade_all.php has been run.
 
 
 ================================================================================
@@ -555,21 +573,18 @@ SOLUTION: This is fixed in the current version. When LBP drawer is selected,
   Suppliers           http://localhost/dahdouh/pages/suppliers.php
   Customers           http://localhost/dahdouh/pages/customers.php
   Expenses            http://localhost/dahdouh/pages/expenses.php
+  Returns             http://localhost/dahdouh/pages/returns.php
   Cash Register       http://localhost/dahdouh/pages/cash_register.php
   Reports             http://localhost/dahdouh/pages/reports.php
   Amenities           http://localhost/dahdouh/pages/amenities.php
+  Backup              http://localhost/dahdouh/pages/backup.php
   Settings            http://localhost/dahdouh/pages/settings.php
   Users               http://localhost/dahdouh/pages/users.php
   Print Barcodes      http://localhost/dahdouh/pages/print_barcodes.php
+  Activate License    http://localhost/dahdouh/pages/activate.php
   phpMyAdmin          http://localhost/phpmyadmin/
 
-  DB Upgrade 1        http://localhost/dahdouh/upgrade.php
-  DB Upgrade 2        http://localhost/dahdouh/upgrade2.php
-  DB Upgrade 3        http://localhost/dahdouh/upgrade3.php
-  DB Upgrade 4        http://localhost/dahdouh/upgrade4.php
-  DB Upgrade 5        http://localhost/dahdouh/upgrade5.php
-  DB Upgrade 6        http://localhost/dahdouh/upgrade6.php
-  DB Upgrade 7        http://localhost/dahdouh/upgrade7.php
+  Database Upgrade    http://localhost/dahdouh/upgrade_all.php
 
 
 ================================================================================
@@ -587,7 +602,7 @@ SOLUTION: This is fixed in the current version. When LBP drawer is selected,
   Installed by XAMPP:
     Apache HTTP Server 2.4
     PHP 8.x
-    MySQL 8.x
+    MySQL / MariaDB
 
 
 ================================================================================
@@ -596,6 +611,25 @@ SOLUTION: This is fixed in the current version. When LBP drawer is selected,
 
   Username : admin
   Password : admin123
+
+
+================================================================================
+  VERSION HISTORY
+================================================================================
+
+  v3.1.0 (2026-06-16)
+    - Returns page: customer returns (cash refund) + supplier returns (credit)
+    - Purchases: per-row type selector (Regular / Consignment / Bulk)
+    - Bug fix: customer credit balance was calculated in the wrong direction
+    - Bug fix: voiding a credit-used sale now fully restores customer balance
+    - Bug fix: customer returns now correctly deduct from cash register
+    - Combined upgrade_all.php replaces all individual upgrade scripts
+    - Software license system: machine-locked activation
+
+  v3.0.0 (2026-06-11)
+    - Initial full release: POS, purchases, suppliers, customers, expenses,
+      cash register, reports, amenities, purchase orders, backup, users,
+      margin calculator, dual-currency support, FIFO inventory
 
 
 ================================================================================

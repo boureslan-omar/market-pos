@@ -196,5 +196,43 @@ alertBox($message);
 
 <button type="submit" class="btn btn-primary px-5">Save Settings</button>
 </form>
+
+<!-- ── License Info ──────────────────────────────────────────────── -->
+<div class="card stat-card p-4 mb-4 mt-4">
+    <h6 class="fw-bold mb-3 text-muted"><i class="bi bi-shield-lock me-1"></i>SOFTWARE LICENSE</h6>
+    <?php
+    $licFile   = __DIR__ . '/../license.lic';
+    $licKey    = file_exists($licFile) ? trim(file_get_contents($licFile)) : null;
+    $licClient = null;
+    if ($licKey) {
+        $decoded = base64_decode($licKey, true);
+        if ($decoded) {
+            $parts = explode('|', $decoded);
+            if (count($parts) >= 2) $licClient = htmlspecialchars($parts[1]);
+        }
+    }
+    ?>
+    <?php if ($licClient): ?>
+    <div class="d-flex align-items-center gap-2 mb-2">
+        <span class="badge bg-success fs-6"><i class="bi bi-check-circle me-1"></i>ACTIVATED</span>
+        <span class="fw-bold"><?= $licClient ?></span>
+    </div>
+    <div class="text-muted small mb-2">
+        <strong>Machine ID:</strong> <code><?= htmlspecialchars(formatMachineId()) ?></code>
+    </div>
+    <div class="text-muted small">License is machine-locked. To transfer to a new machine, contact your developer with the new Machine ID.</div>
+    <?php else: ?>
+    <div class="d-flex align-items-center gap-2 mb-2">
+        <span class="badge bg-danger fs-6"><i class="bi bi-x-circle me-1"></i>NOT ACTIVATED</span>
+    </div>
+    <div class="text-muted small mb-2">
+        <strong>Machine ID:</strong> <code><?= htmlspecialchars(formatMachineId()) ?></code>
+    </div>
+    <a href="/dahdouh/pages/activate.php" class="btn btn-warning btn-sm">
+        <i class="bi bi-key me-1"></i>Activate Now
+    </a>
+    <?php endif; ?>
+</div>
+
 </div>
 <?php renderFoot(); ?>

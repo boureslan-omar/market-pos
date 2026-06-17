@@ -64,10 +64,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'payme
             ->execute([$sid, 'payment', -$amount, $payNote]);
         $message = "success:Payment of " . fmtUSD($amount) . " recorded — deducted from USD cash register.";
     } elseif ($method === 'cash_lbp' && $amountLBP > 0 && $sid) {
+        // Convert LBP to USD equivalent to update supplier balance (balance stored in USD)
+        $amountUSDEquiv = round($amountLBP / EXCHANGE_RATE, 2);
         logCashEntry($pdo, 'withdrawal', 0, $payNote, null, -$amountLBP, 'LBP');
+        $pdo->prepare("UPDATE suppliers SET balance = balance - ? WHERE id=?")->execute([$amountUSDEquiv, $sid]);
         $pdo->prepare("INSERT INTO supplier_ledger (supplier_id, type, amount, note) VALUES (?,?,?,?)")
-            ->execute([$sid, 'payment', 0, $payNote . " (LBP " . number_format($amountLBP) . ")"]);
-        $message = "success:LBP payment of " . number_format($amountLBP) . " ل.ل recorded — deducted from LBP cash register.";
+            ->execute([$sid, 'payment', -$amountUSDEquiv, $payNote . " (LL " . number_format($amountLBP) . " = " . fmtUSD($amountUSDEquiv) . ")"]);
+        $message = "success:LBP payment of LL " . number_format($amountLBP) . " (" . fmtUSD($amountUSDEquiv) . ") recorded — deducted from LBP cash register.";
     } elseif ($amount > 0 && $sid) {
         $pdo->prepare("UPDATE suppliers SET balance = balance - ? WHERE id=?")->execute([$amount, $sid]);
         $pdo->prepare("INSERT INTO supplier_ledger (supplier_id, type, amount, note) VALUES (?,?,?,?)")

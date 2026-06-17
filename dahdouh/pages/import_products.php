@@ -56,6 +56,7 @@ function parseXLSX($path) {
         $wbXml = $zip->getFromName('xl/workbook.xml');
         if ($wbXml) {
             $wb = @simplexml_load_string($wbXml);
+            if (!$wb) { $zip->close(); return false; }
             $wb->registerXPathNamespace('ns', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
             $sheets = $wb->xpath('//ns:sheet');
             if ($sheets) {
@@ -92,6 +93,7 @@ function parseXLSX($path) {
             $maxCol = max($maxCol, $col);
             $t = (string)$cell['t'];
             if ($t === 's') { $rowData[$col] = $strings[(int)(string)$cell->v] ?? ''; }
+            elseif ($t === 'inlineStr') { $rowData[$col] = isset($cell->is->t) ? (string)$cell->is->t : ''; }
             elseif ($t === 'b') { $rowData[$col] = ((string)$cell->v) ? 'TRUE' : 'FALSE'; }
             elseif (isset($cell->v)) { $rowData[$col] = (string)$cell->v; }
             else { $rowData[$col] = ''; }

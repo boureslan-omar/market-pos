@@ -13,7 +13,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'settl
     $amount     = (float)$_POST['amount'];
     $note       = trim($_POST['note'] ?? '');
     $payMethod  = trim($_POST['pay_method'] ?? 'cash_register');
-    if ($amount > 0 && $supplierId) {
+    $amountLBP  = (float)($_POST['amount_lbp'] ?? 0);
+    // For LBP payment, derive USD equivalent for settlement bookkeeping
+    if ($payMethod === 'cash_register_lbp' && $amountLBP > 0) {
+        $amount = round($amountLBP / EXCHANGE_RATE, 2);
+    }
+    if (($amount > 0 || ($payMethod === 'cash_register_lbp' && $amountLBP > 0)) && $supplierId) {
         $supRow = $pdo->prepare("SELECT name FROM suppliers WHERE id=?");
         $supRow->execute([$supplierId]);
         $supName = $supRow->fetchColumn() ?: "Supplier #$supplierId";
@@ -38,7 +43,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'settl
         if ($payMethod === 'cash_register') {
             logCashEntry($pdo, 'withdrawal', -$amount,
                 "Paid consignment supplier: $supName" . ($note ? " — $note" : ''));
-            $cashNote = " Cash withdrawn from register.";
+            $cashNote = " USD cash withdrawn from register.";
+        } elseif ($payMethod === 'cash_register_lbp') {
+            logCashEntry($pdo, 'withdrawal', 0,
+                "Paid consignment supplier (LBP): $supName" . ($note ? " — $note" : ''), null, -$amountLBP, 'LBP');
+            $cashNote = " LBP cash withdrawn from register (≈ " . fmtUSD($amount) . ").";
         } elseif ($payMethod === 'cash_owner') {
             logCashEntry($pdo, 'deposit', $amount,
                 "Owner cash — paid consignment supplier: $supName" . ($note ? " — $note" : ''));
@@ -498,11 +507,17 @@ foreach ($sc as [$label,$val,$cls]): ?>
                    value="<?= $trueOutstanding > 0 ? number_format($trueOutstanding,2,'.','') : '' ?>">
         </div>
         <input type="text" name="note" class="form-control form-control-sm mb-2" placeholder="Note (e.g. cash, transfer)">
-        <select name="pay_method" class="form-select form-select-sm mb-2">
+        <select name="pay_method" id="amenity-pay-method" class="form-select form-select-sm mb-2" onchange="toggleAmenityLBP(this)">
             <option value="cash_register">Deduct from cash register (USD)</option>
+            <option value="cash_register_lbp">Deduct from cash register (LBP)</option>
             <option value="cash_owner">Owner paid cash (add deposit to register)</option>
             <option value="bank_transfer">Bank transfer (no cash movement)</option>
         </select>
+        <div id="amenity-lbp-row" class="d-none mb-2">
+            <input type="number" name="amount_lbp" id="amenity-amount-lbp" class="form-control form-control-sm"
+                   placeholder="Amount in LBP (e.g. 50,000,000)" min="0" step="1">
+            <div class="form-text text-muted small">Enter LBP amount. USD equivalent will be calculated automatically.</div>
+        </div>
         <button type="submit" class="btn btn-warning btn-sm w-100" onclick="return confirm('Record this payment to supplier?')">
             Record Settlement
         </button>
@@ -556,4 +571,18 @@ foreach ($sc as [$label,$val,$cls]): ?>
 </div><!-- row -->
 <?php endif; // view ?>
 </div>
+<script>
+function toggleAmenityLBP(sel) {
+    const row = document.getElementById('amenity-lbp-row');
+    const inp  = document.getElementById('amenity-amount-lbp');
+    if (sel.value === 'cash_register_lbp') {
+        row.classList.remove('d-none');
+        inp.required = true;
+    } else {
+        row.classList.add('d-none');
+        inp.required = false;
+        inp.value = '';
+    }
+}
+</script>
 <?php renderFoot(); ?>
