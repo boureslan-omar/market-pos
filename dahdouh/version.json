@@ -1,6 +1,21 @@
 {
-    "version": "3.1.0",
-    "installed_upgrades": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-    "last_updated": "2026-06-16",
+    "version": "3.2.1",
+    "installed_upgrades": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14
+    ],
+    "last_updated": "2026-06-19",
     "install_date": "2026-06-11"
 }

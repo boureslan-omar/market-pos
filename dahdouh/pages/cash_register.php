@@ -118,6 +118,26 @@ $logStmt = $pdo->prepare("
 $logStmt->execute([$from, $to]);
 $log = $logStmt->fetchAll();
 
+// Owner cash deposits — unsettled (need to be withdrawn later)
+$ownerCashUnsettled = $pdo->query("
+    SELECT * FROM cash_register_log
+    WHERE type = 'deposit'
+      AND note LIKE '%owner%'
+      AND (settled_by IS NULL OR settled_by = 0)
+    ORDER BY created_at DESC
+")->fetchAll();
+
+$ownerCashSettled = $pdo->query("
+    SELECT crl.*, s2.created_at AS settled_at, s2.note AS settled_note
+    FROM cash_register_log crl
+    LEFT JOIN cash_register_log s2 ON s2.id = crl.settled_by
+    WHERE crl.type = 'deposit'
+      AND crl.note LIKE '%owner%'
+      AND crl.settled_by IS NOT NULL AND crl.settled_by > 0
+    ORDER BY crl.created_at DESC
+    LIMIT 20
+")->fetchAll();
+
 $periodInUSD  = array_sum(array_map(fn($r) => $r['amount_usd'] > 0 ? $r['amount_usd'] : 0, $log));
 $periodOutUSD = array_sum(array_map(fn($r) => $r['amount_usd'] < 0 ? abs($r['amount_usd']) : 0, $log));
 $periodInLBP  = array_sum(array_map(fn($r) => $r['amount_lbp'] > 0 ? $r['amount_lbp'] : 0, $log));
@@ -447,5 +467,87 @@ alertBox($message);
 </div>
 </div>
 </div>
+
+<!-- Owner Cash Tracker -->
+<h5 class="fw-bold mb-3 mt-2"><i class="bi bi-person-wallet me-2"></i>Owner Cash Tracker</h5>
+<div class="row g-3 mb-4">
+<div class="col-lg-8">
+<div class="card stat-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-bold">Pending Withdrawal <span class="badge bg-warning text-dark ms-1"><?= count($ownerCashUnsettled) ?></span></span>
+        <small class="text-muted">Owner paid these — money to be returned to owner</small>
+    </div>
+    <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 small">
+        <thead class="table-light"><tr><th>Date</th><th>Amount</th><th>Note</th><th></th></tr></thead>
+        <tbody>
+        <?php foreach ($ownerCashUnsettled as $oc):
+            $ocUSD = (float)$oc['amount_usd'];
+            $ocLBP = (float)($oc['amount_lbp'] ?? 0);
+        ?>
+        <tr>
+            <td><?= date('d/m/Y H:i', strtotime($oc['created_at'])) ?></td>
+            <td class="fw-bold text-success">
+                <?= $ocUSD != 0 ? fmtUSD($ocUSD) : '' ?>
+                <?= $ocLBP != 0 ? fmtLBP($ocLBP) : '' ?>
+            </td>
+            <td class="text-muted"><?= htmlspecialchars($oc['note']) ?></td>
+            <td class="text-end">
+                <button class="btn btn-sm btn-outline-primary" onclick="settleOwnerCash(<?= $oc['id'] ?>, this)">
+                    <i class="bi bi-arrow-left-right me-1"></i>Withdraw from Register
+                </button>
+            </td>
+        </tr>
+        <?php endforeach; ?>
+        <?php if (!$ownerCashUnsettled): ?>
+        <tr><td colspan="4" class="text-center text-muted py-3">No pending owner cash withdrawals.</td></tr>
+        <?php endif; ?>
+        </tbody>
+    </table>
+    </div>
+</div>
+</div>
+<div class="col-lg-4">
+<div class="card stat-card">
+    <div class="card-header fw-bold">Recently Settled</div>
+    <div class="table-responsive">
+    <table class="table table-sm mb-0 small">
+        <thead class="table-light"><tr><th>Date</th><th>Amount</th></tr></thead>
+        <tbody>
+        <?php foreach ($ownerCashSettled as $oc):
+            $ocUSD = (float)$oc['amount_usd'];
+            $ocLBP = (float)($oc['amount_lbp'] ?? 0);
+        ?>
+        <tr>
+            <td class="text-muted"><?= date('d/m/y', strtotime($oc['created_at'])) ?></td>
+            <td><span class="badge bg-secondary"><?= $ocUSD != 0 ? fmtUSD($ocUSD) : fmtLBP($ocLBP) ?></span> <i class="bi bi-check-circle text-success"></i></td>
+        </tr>
+        <?php endforeach; ?>
+        <?php if (!$ownerCashSettled): ?><tr><td colspan="2" class="text-center text-muted py-2">None yet.</td></tr><?php endif; ?>
+        </tbody>
+    </table>
+    </div>
+</div>
+</div>
+</div>
+
+<script>
+function settleOwnerCash(depositId, btn) {
+    if (!confirm('Withdraw this owner cash from the register?\n\nThis logs a matching withdrawal entry.')) return;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    fetch('/dahdouh/pages/api.php?action=settle_owner_cash', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'deposit_id=' + depositId
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.ok) { location.reload(); }
+        else { alert('Error: ' + (d.error || 'Failed')); btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-left-right me-1"></i>Withdraw from Register'; }
+    })
+    .catch(() => { alert('Request failed'); btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-left-right me-1"></i>Withdraw from Register'; });
+}
+</script>
 
 <?php renderFoot(); ?>

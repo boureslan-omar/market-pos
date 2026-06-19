@@ -507,12 +507,15 @@ foreach ($sc as [$label,$val,$cls]): ?>
                    value="<?= $trueOutstanding > 0 ? number_format($trueOutstanding,2,'.','') : '' ?>">
         </div>
         <input type="text" name="note" class="form-control form-control-sm mb-2" placeholder="Note (e.g. cash, transfer)">
-        <select name="pay_method" id="amenity-pay-method" class="form-select form-select-sm mb-2" onchange="toggleAmenityLBP(this)">
-            <option value="cash_register">Deduct from cash register (USD)</option>
-            <option value="cash_register_lbp">Deduct from cash register (LBP)</option>
+        <select name="pay_method" id="amenity-pay-method" class="form-select form-select-sm mb-2" onchange="toggleAmenityLBP()">
+            <option value="cash_register">Deduct from cash register</option>
             <option value="cash_owner">Owner paid cash (add deposit to register)</option>
             <option value="bank_transfer">Bank transfer (no cash movement)</option>
         </select>
+        <div id="amenity-cash-cur" class="btn-group btn-group-sm mb-2">
+            <button type="button" class="btn btn-success active" id="amenity-cur-usd" onclick="setAmenityCur('usd')">$ USD</button>
+            <button type="button" class="btn btn-outline-warning" id="amenity-cur-lbp" onclick="setAmenityCur('lbp')">LL LBP</button>
+        </div>
         <div id="amenity-lbp-row" class="d-none mb-2">
             <input type="number" name="amount_lbp" id="amenity-amount-lbp" class="form-control form-control-sm"
                    placeholder="Amount in LBP (e.g. 50,000,000)" min="0" step="1">
@@ -572,16 +575,30 @@ foreach ($sc as [$label,$val,$cls]): ?>
 <?php endif; // view ?>
 </div>
 <script>
-function toggleAmenityLBP(sel) {
+let _amenityCur = 'usd';
+function toggleAmenityLBP() {
+    const method = document.getElementById('amenity-pay-method')?.value;
+    const isCash = method === 'cash_register';
+    document.getElementById('amenity-cash-cur').style.display = isCash ? '' : 'none';
+    _applyAmenityCur();
+}
+function setAmenityCur(cur) {
+    _amenityCur = cur;
+    document.getElementById('amenity-cur-usd').className = 'btn btn-' + (cur==='usd' ? 'success active' : 'outline-success');
+    document.getElementById('amenity-cur-lbp').className = 'btn btn-' + (cur==='lbp' ? 'warning active' : 'outline-warning');
+    _applyAmenityCur();
+}
+function _applyAmenityCur() {
+    const method  = document.getElementById('amenity-pay-method')?.value;
+    const isLBP   = method === 'cash_register' && _amenityCur === 'lbp';
+    const sel     = document.getElementById('amenity-pay-method');
+    if (method === 'cash_register') sel.value = isLBP ? 'cash_register_lbp' : 'cash_register';
     const row = document.getElementById('amenity-lbp-row');
-    const inp  = document.getElementById('amenity-amount-lbp');
-    if (sel.value === 'cash_register_lbp') {
-        row.classList.remove('d-none');
-        inp.required = true;
+    const inp = document.getElementById('amenity-amount-lbp');
+    if (isLBP) {
+        row.classList.remove('d-none'); inp.required = true;
     } else {
-        row.classList.add('d-none');
-        inp.required = false;
-        inp.value = '';
+        row.classList.add('d-none'); inp.required = false; inp.value = '';
     }
 }
 </script>

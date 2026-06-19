@@ -197,20 +197,57 @@ alertBox($message);
 <button type="submit" class="btn btn-primary px-5">Save Settings</button>
 </form>
 
+<!-- ── Display / UI Scale ─────────────────────────────────────────── -->
+<div class="card stat-card p-4 mb-4 mt-4">
+    <h6 class="fw-bold mb-3 text-muted">DISPLAY</h6>
+    <label class="form-label fw-semibold">Interface Size</label>
+    <div class="d-flex align-items-center gap-3">
+        <span class="text-muted" style="font-size:.85rem;min-width:1.2rem">A</span>
+        <input type="range" class="form-range flex-grow-1" id="ui-scale-slider"
+               min="0.8" max="1.3" step="0.05" value="1">
+        <span class="text-muted fw-bold" style="font-size:1.25rem;min-width:1.5rem">A</span>
+    </div>
+    <div class="text-center text-muted small mt-1">
+        Scale: <span id="ui-scale-val" class="fw-semibold">100%</span>
+        <button class="btn btn-link btn-sm py-0 text-muted ms-2" onclick="resetUiScale()">Reset</button>
+    </div>
+    <div class="form-text mt-2">Scales font size and spacing across all pages. Saved in this browser — each device can have its own setting.</div>
+</div>
+
+<script>
+(function() {
+    const slider = document.getElementById('ui-scale-slider');
+    const valEl  = document.getElementById('ui-scale-val');
+
+    function applyScale(scale) {
+        document.documentElement.style.setProperty('--ui-scale', scale);
+        document.documentElement.style.fontSize = (16 * scale) + 'px';
+        localStorage.setItem('uiScale', scale);
+        valEl.textContent = Math.round(scale * 100) + '%';
+    }
+
+    // Init from localStorage
+    const saved = parseFloat(localStorage.getItem('uiScale') || '1');
+    slider.value = saved;
+    valEl.textContent = Math.round(saved * 100) + '%';
+
+    slider.addEventListener('input', function() {
+        applyScale(parseFloat(this.value));
+    });
+
+    window.resetUiScale = function() {
+        slider.value = 1;
+        applyScale(1);
+    };
+})();
+</script>
+
 <!-- ── License Info ──────────────────────────────────────────────── -->
 <div class="card stat-card p-4 mb-4 mt-4">
     <h6 class="fw-bold mb-3 text-muted"><i class="bi bi-shield-lock me-1"></i>SOFTWARE LICENSE</h6>
     <?php
-    $licFile   = __DIR__ . '/../license.lic';
-    $licKey    = file_exists($licFile) ? trim(file_get_contents($licFile)) : null;
-    $licClient = null;
-    if ($licKey) {
-        $decoded = base64_decode($licKey, true);
-        if ($decoded) {
-            $parts = explode('|', $decoded);
-            if (count($parts) >= 2) $licClient = htmlspecialchars($parts[1]);
-        }
-    }
+    $licClient = getLicenseClient() ?: null;
+    if ($licClient) $licClient = htmlspecialchars($licClient);
     ?>
     <?php if ($licClient): ?>
     <div class="d-flex align-items-center gap-2 mb-2">

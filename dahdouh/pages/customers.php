@@ -260,7 +260,15 @@ alertBox($message);
                         <span class="badge bg-success">OK</span>
                     <?php endif; ?>
                 </td>
-                <td>
+                <td class="text-end" style="white-space:nowrap">
+                    <button class="btn btn-link btn-sm p-0 me-2 text-secondary" onclick="printReceipt(<?= $r['id'] ?>)" title="Print receipt">
+                        <i class="bi bi-printer"></i>
+                    </button>
+                    <?php if (!$r['is_void']): ?>
+                    <button class="btn btn-link btn-sm p-0 me-2 text-primary" onclick="editSale(<?= $r['id'] ?>, '<?= htmlspecialchars(addslashes($r['receipt_no'])) ?>')" title="Edit receipt">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <?php endif; ?>
                     <button class="btn btn-link btn-sm p-0" onclick="toggleReceiptItems(<?= $r['id'] ?>, this)" title="View items">
                         <i class="bi bi-chevron-down"></i>
                     </button>
@@ -457,7 +465,283 @@ function toggleReceiptItems(saleId, btn) {
 }
 
 function escHtml(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Edit Sale ─────────────────────────────────────────────────────────────────
+let _editSaleId = null, _editItems = [], _editSaleData = null;
+
+function editSale(id, receipt) {
+    _editSaleId = id;
+    _editItems  = [];
+    _editSaleData = null;
+    document.getElementById('edit-receipt-label').textContent = '#' + receipt;
+    document.getElementById('edit-modal-body').innerHTML = '<div class="text-center py-4"><div class="spinner-border" role="status"></div></div>';
+    document.getElementById('edit-note').value = '';
+    new bootstrap.Modal(document.getElementById('editSaleModal')).show();
+    fetch('/dahdouh/pages/api.php?action=get_sale_for_edit&sale_id=' + id)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) { document.getElementById('edit-modal-body').innerHTML = '<div class="alert alert-danger">' + escHtml(data.error) + '</div>'; return; }
+            _editItems    = data.items;
+            _editSaleData = data;
+            renderEditItems(data);
+        })
+        .catch(() => { document.getElementById('edit-modal-body').innerHTML = '<div class="alert alert-danger">Network error</div>'; });
+}
+
+function buildEditRow(item, i) {
+    const sub = ((parseFloat(item.quantity)||0) * (parseFloat(item.unit_price)||0)).toFixed(2);
+    const typeBadge = item.is_consignment
+        ? '<span class="badge" style="background:#7c3aed;color:#fff">Consign</span>'
+        : (item.product_type === 'bulk' ? '<span class="badge bg-warning text-dark">Bulk</span>' : '<span class="badge bg-info text-dark">Owned</span>');
+    return `<tr id="edit-row-${i}">
+        <td class="small">${escHtml(item.product_name)}</td>
+        <td>${typeBadge}</td>
+        <td><input type="number" class="form-control form-control-sm" style="width:90px" min="0.001" step="0.001"
+            value="${parseFloat(item.quantity)}" id="edit-qty-${i}" onchange="updateEditSubtotal(${i})"></td>
+        <td><input type="number" class="form-control form-control-sm" style="width:105px" min="0" step="0.0001"
+            value="${parseFloat(item.unit_price).toFixed(4)}" id="edit-price-${i}" onchange="updateEditSubtotal(${i})"></td>
+        <td class="text-end fw-bold" id="edit-sub-${i}">$${sub}</td>
+        <td><button type="button" class="btn btn-sm btn-outline-danger py-0" onclick="removeEditRow(${i})" title="Remove"><i class="bi bi-trash"></i></button></td>
+    </tr>`;
+}
+
+function renderEditItems(data) {
+    let html = '<div class="alert alert-warning py-2 small mb-3"><i class="bi bi-exclamation-triangle me-1"></i>Qty/price changes adjust stock, batches &amp; totals. Use trash to remove items. Use Add to insert new ones.</div>';
+    html += '<table class="table table-sm"><thead><tr><th>Product</th><th>Type</th><th>Qty</th><th>Unit Price ($)</th><th class="text-end">Subtotal</th><th></th></tr></thead><tbody id="edit-items-tbody">';
+    data.items.forEach((item, i) => { html += buildEditRow(item, i); });
+    html += '</tbody></table>';
+    html += `<button type="button" class="btn btn-sm btn-outline-success mb-3" onclick="addEditRow()"><i class="bi bi-plus me-1"></i>Add Product</button>
+    <div id="edit-add-search" style="display:none" class="mb-3">
+        <div class="input-group input-group-sm">
+            <input type="text" id="edit-product-search" class="form-control" placeholder="Type product name or scan barcode…"
+                oninput="searchEditProduct()" autocomplete="off">
+            <button class="btn btn-outline-secondary" type="button" onclick="document.getElementById('edit-add-search').style.display='none'">✕</button>
+        </div>
+        <div id="edit-product-results" class="list-group mt-1" style="max-height:160px;overflow-y:auto"></div>
+    </div>`;
+    html += `<div class="d-flex justify-content-end gap-3 mt-1 small">
+        <span class="text-muted">Discount: -$${parseFloat(data.discount||0).toFixed(2)} &nbsp; Credit: -$${parseFloat(data.credit_used||0).toFixed(2)}</span>
+        <span>Original: <strong>$${parseFloat(data.total).toFixed(2)}</strong></span>
+        <span class="text-primary">New total: <strong id="edit-new-total">$${parseFloat(data.total).toFixed(2)}</strong></span>
+    </div>`;
+    document.getElementById('edit-modal-body').innerHTML = html;
+}
+
+function removeEditRow(i) {
+    _editItems[i]._removed = true;
+    const row = document.getElementById('edit-row-' + i);
+    if (row) row.remove();
+    recalcEditTotal();
+}
+
+function addEditRow() {
+    document.getElementById('edit-add-search').style.display = '';
+    document.getElementById('edit-product-search').value = '';
+    document.getElementById('edit-product-results').innerHTML = '';
+    document.getElementById('edit-product-search').focus();
+}
+
+let _editSearchTimer = null;
+function searchEditProduct() {
+    clearTimeout(_editSearchTimer);
+    const q = document.getElementById('edit-product-search')?.value?.trim();
+    if (!q || q.length < 2) { document.getElementById('edit-product-results').innerHTML = ''; return; }
+    const isBarcode = /^\d{6,}$/.test(q);
+    _editSearchTimer = setTimeout(() => {
+        fetch('/dahdouh/pages/api.php?action=search_products_purchase&q=' + encodeURIComponent(q))
+            .then(r => r.json())
+            .then(results => {
+                const el = document.getElementById('edit-product-results');
+                if (!el) return;
+                if (!results.length) { el.innerHTML = '<div class="list-group-item small text-muted">No products found</div>'; return; }
+                el.innerHTML = results.slice(0, 8).map(p => {
+                    const barcodeBadge = p.barcode ? `<span class="text-muted ms-2" style="font-size:.7rem">${escHtml(p.barcode)}</span>` : '';
+                    const price = parseFloat(p.sell_price||0).toFixed(2);
+                    return `<button type="button" class="list-group-item list-group-item-action py-1 small"
+                        onclick="pickEditProduct(${p.id}, '${escHtml(p.name).replace(/'/g,"\\'")}', ${parseFloat(p.sell_price)||0})">
+                        <strong>${escHtml(p.name)}</strong>${barcodeBadge}
+                        <span class="float-end text-success">$${price}</span>
+                    </button>`;
+                }).join('');
+                if (isBarcode && results.length === 1) {
+                    pickEditProduct(results[0].id, results[0].name, parseFloat(results[0].sell_price)||0);
+                }
+            });
+    }, isBarcode ? 0 : 300);
+}
+
+function pickEditProduct(pid, name, price) {
+    document.getElementById('edit-add-search').style.display = 'none';
+    const i = _editItems.length;
+    _editItems.push({ id: 'new_' + pid, product_id: pid, product_name: name, product_type: 'regular', is_consignment: 0, quantity: 1, unit_price: price, _new: true });
+    const tbody = document.getElementById('edit-items-tbody');
+    if (tbody) tbody.insertAdjacentHTML('beforeend', buildEditRow(_editItems[i], i));
+    recalcEditTotal();
+}
+
+function updateEditSubtotal(i) {
+    const qty   = parseFloat(document.getElementById('edit-qty-'+i)?.value) || 0;
+    const price = parseFloat(document.getElementById('edit-price-'+i)?.value) || 0;
+    const el = document.getElementById('edit-sub-'+i);
+    if (el) el.textContent = '$' + (qty * price).toFixed(2);
+    recalcEditTotal();
+}
+
+function recalcEditTotal() {
+    let subtotal = 0;
+    _editItems.forEach((item, j) => {
+        if (item._removed) return;
+        subtotal += (parseFloat(document.getElementById('edit-qty-'+j)?.value)||0)
+                  * (parseFloat(document.getElementById('edit-price-'+j)?.value)||0);
+    });
+    const newTotal = Math.max(0, subtotal - (parseFloat(_editSaleData?.discount)||0) - (parseFloat(_editSaleData?.credit_used)||0));
+    const el = document.getElementById('edit-new-total');
+    if (el) el.textContent = '$' + newTotal.toFixed(2);
+}
+
+function submitEditSale() {
+    if (!_editSaleId || !_editItems.length) return;
+    const items = _editItems
+        .filter(item => !item._removed)
+        .map((item, _) => {
+            const i = _editItems.indexOf(item);
+            return {
+                id:         item.id,
+                qty:        parseFloat(document.getElementById('edit-qty-'+i)?.value) || 0,
+                price:      parseFloat(document.getElementById('edit-price-'+i)?.value) || 0,
+                product_id: item.product_id || null,
+                _new:       item._new || false
+            };
+        });
+    const note = document.getElementById('edit-note').value.trim();
+    const body = new URLSearchParams({ sale_id: _editSaleId, items: JSON.stringify(items), note });
+    fetch('/dahdouh/pages/api.php?action=edit_sale', { method:'POST', body })
+        .then(r => r.json())
+        .then(d => {
+            if (!d.ok) { alert('Error: ' + (d.error || 'Unknown error')); return; }
+            bootstrap.Modal.getInstance(document.getElementById('editSaleModal'))?.hide();
+            const diffLabel = parseFloat(d.diff) >= 0 ? '+$' + parseFloat(d.diff).toFixed(2) : '-$' + Math.abs(parseFloat(d.diff)).toFixed(2);
+            alert('Sale updated.\nNew total: $' + parseFloat(d.new_total).toFixed(2) + '\nAdjustment: ' + diffLabel);
+            location.reload();
+        })
+        .catch(() => alert('Network error'));
+}
+
+function printReceipt(saleId) {
+    const modal = new bootstrap.Modal(document.getElementById('receiptPrintModal'));
+    const body  = document.getElementById('receipt-print-body');
+    body.innerHTML = '<div class="text-center py-4 text-muted">Loading…</div>';
+    modal.show();
+    fetch('/dahdouh/pages/api.php?action=sale_receipt&sale_id=' + saleId)
+        .then(r => r.json())
+        .then(s => {
+            if (s.error) { body.innerHTML = '<p class="text-danger">' + escHtml(s.error) + '</p>'; return; }
+            const rate = parseFloat(s.exchange_rate_used) || 1;
+            let rows = '';
+            (s.items || []).forEach(it => {
+                rows += `<tr>
+                    <td>${escHtml(it.product_name)}</td>
+                    <td class="text-end">${parseFloat(it.quantity)}</td>
+                    <td class="text-end">$${parseFloat(it.unit_price).toFixed(2)}</td>
+                    <td class="text-end fw-bold">$${parseFloat(it.total).toFixed(2)}</td>
+                </tr>`;
+            });
+            const fUSD = v => '$' + parseFloat(v).toFixed(2);
+            const fLBP = v => parseInt(v).toLocaleString() + ' LL';
+            const d = new Date(s.sale_date);
+            const dateStr = d.toLocaleDateString('en-GB') + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+            body.innerHTML = `
+                <div class="text-center mb-3">
+                    <div class="fw-bold fs-5" style="color:#2d5a2d">${escHtml(s.store_name)}</div>
+                    ${s.store_address ? `<div class="small text-muted">${escHtml(s.store_address)}</div>` : ''}
+                    ${s.store_phone ? `<div class="small text-muted">${escHtml(s.store_phone)}</div>` : ''}
+                    <div class="small text-muted mt-1">${dateStr}</div>
+                    <div class="fw-bold mt-1">Receipt: ${escHtml(s.receipt_no || '—')}</div>
+                    ${s.customer_name ? `<div class="small">Customer: <strong>${escHtml(s.customer_name)}</strong></div>` : ''}
+                    ${s.is_void == 1 ? '<div class="badge bg-danger mt-1">VOIDED</div>' : ''}
+                </div>
+                <hr>
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Item</th><th class="text-end">Qty</th><th class="text-end">Price</th><th class="text-end">Total</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+                <hr>
+                <div class="d-flex justify-content-between"><span>Subtotal</span><span>${fUSD(s.subtotal)}</span></div>
+                ${parseFloat(s.discount)>0 ? `<div class="d-flex justify-content-between text-muted"><span>Discount</span><span>-${fUSD(s.discount)}</span></div>` : ''}
+                ${parseFloat(s.credit_used)>0 ? `<div class="d-flex justify-content-between text-muted"><span>Credit Applied</span><span>-${fUSD(s.credit_used)}</span></div>` : ''}
+                <div class="d-flex justify-content-between fw-bold fs-5 mt-2"><span>TOTAL</span><span>${fUSD(s.total)}</span></div>
+                <div class="d-flex justify-content-between small text-muted"><span></span><span>${fLBP(parseFloat(s.total)*rate)}</span></div>
+                ${parseFloat(s.paid_usd)>0 ? `<div class="d-flex justify-content-between small mt-1"><span>Paid (USD)</span><span>${fUSD(s.paid_usd)}</span></div>` : ''}
+                ${parseFloat(s.paid_lbp)>0 ? `<div class="d-flex justify-content-between small"><span>Paid (LBP)</span><span>${fLBP(s.paid_lbp)}</span></div>` : ''}
+                ${parseFloat(s.change_usd)>0 ? `<div class="d-flex justify-content-between text-success fw-bold"><span>Change (USD)</span><span>${fUSD(s.change_usd)}</span></div>` : ''}
+                ${parseFloat(s.change_lbp)>0 ? `<div class="d-flex justify-content-between text-success fw-bold"><span>Change (LBP)</span><span>${fLBP(s.change_lbp)}</span></div>` : ''}
+                ${parseFloat(s.debt_settled)>0 ? `<div class="d-flex justify-content-between small mt-1 text-danger fw-bold"><span>Debt Settled</span><span>${fLBP(parseFloat(s.debt_settled)*rate)}</span></div>` : ''}
+                <div class="text-center text-muted small mt-3">Thank you!</div>`;
+        })
+        .catch(() => { body.innerHTML = '<p class="text-danger">Failed to load receipt.</p>'; });
+}
+
+function printReceiptWindow() {
+    const html = document.getElementById('receipt-print-body').innerHTML;
+    const win = window.open('', '_blank', 'width=320,height=600,scrollbars=yes');
+    win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Receipt</title>' +
+        '<style>' +
+        '@page{size:80mm auto;margin:3mm 4mm}' +
+        '*{color:#000!important;background:transparent!important}' +
+        'body{font-family:"Courier New",Courier,monospace;font-size:12px;width:72mm;margin:0;padding:0}' +
+        'table{width:100%;border-collapse:collapse}' +
+        'th{font-size:11px;border-bottom:1px dashed #000;padding:2px 0;text-align:left}' +
+        'td{font-size:11px;padding:2px 0;vertical-align:top}' +
+        '.text-end{text-align:right}.text-center{text-align:center}' +
+        '.fw-bold{font-weight:bold}.fs-5{font-size:13px}' +
+        '.d-flex{display:flex}.justify-content-between{justify-content:space-between}' +
+        '.badge{display:inline-block;border:1px solid #000;padding:1px 6px;font-weight:bold;font-size:11px}' +
+        'hr{border:none;border-top:1px dashed #000;margin:4px 0}' +
+        '.small{font-size:10px}.mt-1{margin-top:2px}.mt-2{margin-top:4px}.mt-3{margin-top:6px}.mb-0{margin-bottom:0}.mb-3{margin-bottom:6px}' +
+        '</style></head><body>' + html +
+        '<script>window.onload=function(){window.print();}<\/script>' +
+        '</body></html>');
+    win.document.close();
 }
 </script>
+
+<!-- Receipt Print Modal -->
+<div class="modal fade" id="receiptPrintModal" tabindex="-1">
+<div class="modal-dialog modal-sm">
+<div class="modal-content">
+    <div class="modal-header py-2 border-0">
+        <h6 class="modal-title"><i class="bi bi-receipt me-2"></i>Receipt</h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body receipt p-4" id="receipt-print-body"></div>
+    <div class="modal-footer py-2 border-0 no-print">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button class="btn btn-sm btn-primary" onclick="printReceiptWindow()"><i class="bi bi-printer me-1"></i>Print</button>
+    </div>
+</div>
+</div>
+</div>
+
+<!-- Edit Sale Modal -->
+<div class="modal fade" id="editSaleModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Edit Sale <span id="edit-receipt-label"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="edit-modal-body">
+        <div class="text-center py-4"><div class="spinner-border" role="status"></div></div>
+      </div>
+      <div class="modal-footer">
+        <input type="text" id="edit-note" class="form-control form-control-sm me-auto" placeholder="Reason for edit (optional)…" style="max-width:300px">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="submitEditSale()"><i class="bi bi-check-lg me-1"></i>Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <?php renderFoot(); ?>

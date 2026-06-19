@@ -285,6 +285,7 @@ alertBox($message);
         <td class="small text-muted"><?= htmlspecialchars($p['note'] ?: '—') ?></td>
         <td>
             <button class="btn btn-sm btn-outline-primary me-1" onclick="viewPurchase(<?= $p['id'] ?>, '<?= addslashes(htmlspecialchars($p['reference'] ?: '#'.$p['id'])) ?>')" title="View details"><i class="bi bi-eye"></i></button>
+            <button class="btn btn-sm btn-outline-warning me-1" onclick="editPurchase(<?= $p['id'] ?>, '<?= addslashes(htmlspecialchars($p['reference'] ?: '#'.$p['id'])) ?>')" title="Edit purchase"><i class="bi bi-pencil"></i></button>
             <a href="?delete=<?= $p['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete? Stock will be reversed.')" title="Delete"><i class="bi bi-trash"></i></a>
         </td>
     </tr>
@@ -300,7 +301,7 @@ alertBox($message);
 <div class="modal fade" id="purchaseModal" tabindex="-1">
 <div class="modal-dialog modal-xl">
 <div class="modal-content">
-<form method="POST" id="purch-form">
+<form method="POST" id="purch-form" onsubmit="applyPurchDrawer()">
     <div class="modal-header">
         <h5 class="modal-title"><i class="bi bi-truck me-2"></i>New Purchase</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -351,12 +352,15 @@ alertBox($message);
     <div class="modal-footer">
         <div class="me-auto">
             <label class="form-label small mb-1 fw-semibold">Payment Method</label>
-            <select name="payment_method" class="form-select form-select-sm" style="min-width:260px">
-                <option value="cash_register">Deduct from cash register (USD drawer)</option>
-                <option value="cash_register_lbp">Deduct from cash register (LBP drawer)</option>
+            <select name="payment_method" id="purch-pay-sel" class="form-select form-select-sm" style="min-width:260px" onchange="togglePurchDrawer()">
+                <option value="cash_register">Deduct from cash register</option>
                 <option value="cash_owner">Cash from owner — deposit to register</option>
                 <option value="pay_later">Pay later — show in supplier balance</option>
             </select>
+            <div id="purch-drawer-cur" class="btn-group btn-group-sm mt-1">
+                <button type="button" class="btn btn-success active" id="pdcur-usd" onclick="setPurchDrawer('usd')">$ USD</button>
+                <button type="button" class="btn btn-outline-warning" id="pdcur-lbp" onclick="setPurchDrawer('lbp')">LL LBP</button>
+            </div>
         </div>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
         <button type="submit" class="btn btn-primary px-4">Save Purchase</button>
@@ -380,15 +384,70 @@ alertBox($message);
 <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div>
 </div></div></div>
 
+<!-- ── Edit Purchase Modal ────────────────────────────────────────────────────── -->
+<div class="modal fade" id="editPurchModal" tabindex="-1">
+<div class="modal-dialog modal-lg">
+<div class="modal-content">
+<div class="modal-header">
+    <h5 class="modal-title fw-bold"><i class="bi bi-pencil me-2"></i>Edit Purchase <span id="ep-title"></span></h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<div class="modal-body p-0">
+    <div id="ep-body" class="p-3">
+        <div class="text-center py-4"><div class="spinner-border" role="status"></div></div>
+    </div>
+</div>
+<div class="modal-footer">
+    <span class="me-auto text-muted small">Stock &amp; batch quantities adjust automatically. Costs apply immediately.</span>
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+    <button type="button" class="btn btn-warning px-4" onclick="submitPurchaseEdit()"><i class="bi bi-check-lg me-1"></i>Save Changes</button>
+</div>
+</div></div></div>
+
 <!-- ── Quick Add New Product Modal ───────────────────────────────────────────── -->
 <div class="modal fade" id="quickAddModal" tabindex="-1" style="z-index:1060">
-<div class="modal-dialog modal-dialog-centered">
+<div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
 <div class="modal-content">
     <div class="modal-header py-2">
         <h6 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Add New Product</h6>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
     </div>
     <div class="modal-body">
+        <!-- Product Source -->
+        <div class="mb-3">
+            <label class="form-label small fw-bold">Product Source</label>
+            <div class="d-flex gap-4">
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="qp_source" id="qp_src_owned" value="owned" checked onchange="qpToggleSource()">
+                    <label class="form-check-label small" for="qp_src_owned"><strong>Owned</strong> — purchased by the market</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="qp_source" id="qp_src_cons" value="consignment" onchange="qpToggleSource()">
+                    <label class="form-check-label small" for="qp_src_cons"><strong>Consignment</strong> — sold on behalf of supplier</label>
+                </div>
+            </div>
+        </div>
+        <!-- Consignment fields -->
+        <div id="qp_cons_fields" class="alert alert-info py-2 px-3 mb-3 d-none">
+            <div class="row g-2">
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold mb-1">Consignment Supplier *</label>
+                    <select id="qp_cons_sup" class="form-select form-select-sm">
+                        <option value="">— Select Supplier —</option>
+                        <?php foreach ($suppliers as $s): ?><option value="<?= $s['id'] ?>"><?= htmlspecialchars($s['name']) ?></option><?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold mb-1">Supplier Cost / Unit *</label>
+                    <div class="input-group input-group-sm">
+                        <input type="number" id="qp_cons_cost" class="form-control" step="0.0001" min="0" placeholder="Cost per unit" data-cur="usd" oninput="qpUpdateHint('qp_cons_cost')">
+                        <button type="button" id="qp_cons_cost_usd" class="btn btn-outline-secondary px-1" style="font-size:.65rem;font-weight:bold;min-width:32px" onclick="qpToggleCur('qp_cons_cost','usd')">USD</button>
+                        <button type="button" id="qp_cons_cost_lbp" class="btn btn-outline-secondary px-1 opacity-50" style="font-size:.65rem;min-width:32px" onclick="qpToggleCur('qp_cons_cost','lbp')">LBP</button>
+                    </div>
+                    <div id="qp_cons_cost_hint" class="text-muted" style="font-size:.65rem"></div>
+                </div>
+            </div>
+        </div>
         <div class="row g-2">
             <div class="col-12">
                 <label class="form-label small fw-bold">Product Name *</label>
@@ -402,14 +461,14 @@ alertBox($message);
                 </div>
             </div>
             <div class="col-md-6">
-                <label class="form-label small fw-bold">Unit</label>
-                <select id="qp_unit" class="form-select form-select-sm">
-                    <option value="pcs">pcs</option>
+                <label class="form-label small fw-bold">Unit <span id="qp_type_badge" class="badge bg-secondary ms-1" style="font-size:.6rem">Regular</span></label>
+                <select id="qp_unit" class="form-select form-select-sm" onchange="qpOnUnitChange()">
+                    <option value="pcs">pcs — pieces</option>
                     <option value="box">box</option>
-                    <option value="kg">kg</option>
-                    <option value="g">g</option>
-                    <option value="L">L</option>
-                    <option value="mL">mL</option>
+                    <option value="kg">kg — kilograms</option>
+                    <option value="g">g — grams</option>
+                    <option value="L">L — litres</option>
+                    <option value="mL">mL — millilitres</option>
                 </select>
             </div>
             <div class="col-md-6">
@@ -429,23 +488,62 @@ alertBox($message);
                     <?php foreach ($suppliers as $s): ?><option value="<?= $s['id'] ?>"><?= htmlspecialchars($s['name']) ?></option><?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-6">
+            <!-- Cost (hidden for box — auto-calc from cost_box/upb) / Sell always visible except bulk -->
+            <div class="col-md-6" id="qp_row_cost">
                 <label class="form-label small fw-bold">Cost Price</label>
                 <div class="input-group input-group-sm">
                     <input type="number" id="qp_cost" class="form-control" step="0.0001" min="0" data-cur="usd" oninput="qpUpdateHint('qp_cost')">
-                    <button type="button" id="qp_cost_usd" class="btn btn-outline-secondary px-1 cur-active" style="font-size:.65rem;font-weight:bold;min-width:32px" onclick="qpToggleCur('qp_cost','usd')">USD</button>
+                    <button type="button" id="qp_cost_usd" class="btn btn-outline-secondary px-1" style="font-size:.65rem;font-weight:bold;min-width:32px" onclick="qpToggleCur('qp_cost','usd')">USD</button>
                     <button type="button" id="qp_cost_lbp" class="btn btn-outline-secondary px-1 opacity-50" style="font-size:.65rem;min-width:32px" onclick="qpToggleCur('qp_cost','lbp')">LBP</button>
                 </div>
                 <div id="qp_cost_hint" class="text-muted" style="font-size:.65rem"></div>
             </div>
-            <div class="col-md-6">
-                <label class="form-label small fw-bold">Sell Price</label>
+            <div class="col-md-6" id="qp_row_sell">
+                <label class="form-label small fw-bold"><span id="qp_sell_label">Sell Price</span> <span id="qp_sell_sublabel" class="text-muted fw-normal">(per unit)</span></label>
                 <div class="input-group input-group-sm">
                     <input type="number" id="qp_sell" class="form-control" step="0.0001" min="0" data-cur="usd" oninput="qpUpdateHint('qp_sell')">
-                    <button type="button" id="qp_sell_usd" class="btn btn-outline-secondary px-1 cur-active" style="font-size:.65rem;font-weight:bold;min-width:32px" onclick="qpToggleCur('qp_sell','usd')">USD</button>
+                    <button type="button" id="qp_sell_usd" class="btn btn-outline-secondary px-1" style="font-size:.65rem;font-weight:bold;min-width:32px" onclick="qpToggleCur('qp_sell','usd')">USD</button>
                     <button type="button" id="qp_sell_lbp" class="btn btn-outline-secondary px-1 opacity-50" style="font-size:.65rem;min-width:32px" onclick="qpToggleCur('qp_sell','lbp')">LBP</button>
                 </div>
                 <div id="qp_sell_hint" class="text-muted" style="font-size:.65rem"></div>
+            </div>
+            <!-- Box details (shown when unit=box) -->
+            <div class="col-12" id="qp_box_section" style="display:none">
+                <hr class="my-1"><label class="form-label small fw-semibold text-muted">📦 Box Details</label>
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Units per Box</label>
+                        <input type="number" id="qp_upb" class="form-control form-control-sm" min="1" step="1" value="1" oninput="qpCalcFromBox()">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Cost per Box</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">$</span>
+                            <input type="number" id="qp_cost_box" class="form-control" step="0.0001" min="0" placeholder="What you pay" oninput="qpCalcFromBox()">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Sell per Box <span class="text-muted fw-normal">(Wholesale)</span></label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" id="qp_sell_box" class="form-control" step="0.0001" min="0" data-cur="usd" oninput="qpUpdateHint('qp_sell_box');qpCalcFromBox()">
+                            <button type="button" id="qp_sell_box_usd" class="btn btn-outline-secondary px-1" style="font-size:.65rem;font-weight:bold;min-width:32px" onclick="qpToggleCur('qp_sell_box','usd')">USD</button>
+                            <button type="button" id="qp_sell_box_lbp" class="btn btn-outline-secondary px-1 opacity-50" style="font-size:.65rem;min-width:32px" onclick="qpToggleCur('qp_sell_box','lbp')">LBP</button>
+                        </div>
+                        <div id="qp_sell_box_hint" class="text-muted" style="font-size:.65rem"></div>
+                    </div>
+                    <div class="col-12">
+                        <div id="qp_box_summary" class="small text-primary" style="min-height:1.2em"></div>
+                    </div>
+                </div>
+            </div>
+            <!-- Stock (hidden for bulk) -->
+            <div class="col-md-6 qp_regular_only">
+                <label class="form-label small fw-bold">Initial Stock</label>
+                <input type="number" id="qp_stock" class="form-control form-control-sm" min="0" step="0.001" value="0">
+            </div>
+            <div class="col-md-6 qp_regular_only">
+                <label class="form-label small fw-bold">Low Stock Alert</label>
+                <input type="number" id="qp_alert" class="form-control form-control-sm" min="0" step="0.001" value="5">
             </div>
         </div>
         <div class="text-danger small mt-2" id="qp_error"></div>
@@ -770,22 +868,34 @@ function checkBatch(i) {
 
 function openQuickAddModal(i) {
     _qpRowIdx = i;
-    document.getElementById('qp_name').value  = document.getElementById('psearch-'+i)?.value || '';
-    document.getElementById('qp_barcode').value = '';
-    document.getElementById('qp_unit').value  = 'pcs';
-    document.getElementById('qp_cat').value   = '';
-    document.getElementById('qp_sup').value   = '';
-    document.getElementById('qp_cost').value  = '';
-    document.getElementById('qp_sell').value  = '';
-    document.getElementById('qp_cost').dataset.cur = 'usd'; document.getElementById('qp_cost').step = '0.0001';
-    document.getElementById('qp_sell').dataset.cur = 'usd'; document.getElementById('qp_sell').step = '0.0001';
-    document.getElementById('qp_cost_usd').classList.remove('opacity-50'); document.getElementById('qp_cost_usd').style.fontWeight='bold';
-    document.getElementById('qp_cost_lbp').classList.add('opacity-50');    document.getElementById('qp_cost_lbp').style.fontWeight='';
-    document.getElementById('qp_sell_usd').classList.remove('opacity-50'); document.getElementById('qp_sell_usd').style.fontWeight='bold';
-    document.getElementById('qp_sell_lbp').classList.add('opacity-50');    document.getElementById('qp_sell_lbp').style.fontWeight='';
-    document.getElementById('qp_cost_hint').textContent = '';
-    document.getElementById('qp_sell_hint').textContent = '';
-    document.getElementById('qp_error').textContent = '';
+    document.getElementById('qp_name').value    = document.getElementById('psearch-'+i)?.value || '';
+    document.getElementById('qp_src_owned').checked = true;
+    document.getElementById('qp_cons_fields').classList.add('d-none');
+    document.getElementById('qp_cons_sup').value  = '';
+    document.getElementById('qp_cons_cost').value = '';
+    document.getElementById('qp_barcode').value   = '';
+    document.getElementById('qp_unit').value      = 'pcs';
+    document.getElementById('qp_cat').value       = '';
+    document.getElementById('qp_sup').value       = '';
+    document.getElementById('qp_cost').value      = '';
+    document.getElementById('qp_sell').value      = '';
+    document.getElementById('qp_stock').value     = '0';
+    document.getElementById('qp_alert').value     = '5';
+    document.getElementById('qp_upb').value       = '1';
+    document.getElementById('qp_cost_box').value  = '';
+    document.getElementById('qp_sell_box').value  = '';
+    ['qp_cost','qp_sell','qp_sell_box','qp_cons_cost'].forEach(fid => {
+        const inp = document.getElementById(fid);
+        if (!inp) return;
+        inp.dataset.cur = 'usd'; inp.step = '0.0001';
+        const u = document.getElementById(fid+'_usd'), l = document.getElementById(fid+'_lbp');
+        if (u) { u.classList.remove('opacity-50'); u.style.fontWeight = 'bold'; }
+        if (l) { l.classList.add('opacity-50');    l.style.fontWeight = ''; }
+    });
+    ['qp_cost_hint','qp_sell_hint','qp_sell_box_hint','qp_cons_cost_hint','qp_box_summary','qp_error'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.textContent = '';
+    });
+    qpOnUnitChange();
     new bootstrap.Modal(document.getElementById('quickAddModal')).show();
     setTimeout(() => document.getElementById('qp_name').focus(), 300);
 }
@@ -832,19 +942,124 @@ function qpGenerateBarcode() {
         .then(d => { document.getElementById('qp_barcode').value = d.barcode; });
 }
 
+function qpToggleSource() {
+    const isCons = document.getElementById('qp_src_cons').checked;
+    document.getElementById('qp_cons_fields').classList.toggle('d-none', !isCons);
+}
+
+function qpOnUnitChange() {
+    const unit   = document.getElementById('qp_unit').value;
+    const isBulk = ['kg','g','L','mL'].includes(unit);
+    const isBox  = unit === 'box';
+    const badge  = document.getElementById('qp_type_badge');
+    badge.textContent = isBulk ? 'Bulk' : 'Regular';
+    badge.className   = 'badge ms-1 ' + (isBulk ? 'bg-warning text-dark' : 'bg-secondary');
+    document.getElementById('qp_row_cost').style.display    = isBox ? 'none' : '';
+    document.getElementById('qp_row_sell').style.display    = isBulk ? 'none' : '';
+    document.getElementById('qp_box_section').style.display = isBox ? ''     : 'none';
+    document.querySelectorAll('.qp_regular_only').forEach(el => el.style.display = isBulk ? 'none' : '');
+    const sellLabel    = document.getElementById('qp_sell_label');
+    const sellSublabel = document.getElementById('qp_sell_sublabel');
+    if (sellLabel)    sellLabel.textContent    = isBox ? 'Sell per Unit' : 'Sell Price';
+    if (sellSublabel) sellSublabel.textContent = isBox ? '(Retail)'      : '(per unit)';
+    if (isBox) qpCalcFromBox();
+}
+
+function qpCalcFromBox() {
+    const upb        = Math.max(1, parseInt(document.getElementById('qp_upb')?.value || 1));
+    const costBox    = parseFloat(document.getElementById('qp_cost_box')?.value || 0);
+    const sellBoxUsd = qpToUsd('qp_sell_box');
+    const sellUsd    = qpToUsd('qp_sell');
+    if (costBox > 0) document.getElementById('qp_cost').value = (costBox / upb).toFixed(4);
+    const el = document.getElementById('qp_box_summary');
+    if (!el) return;
+    const parts = [`${upb} units/box`];
+    if (costBox > 0)    parts.push(`cost $${(costBox/upb).toFixed(4)}/unit`);
+    if (sellUsd > 0)    parts.push(`retail $${sellUsd.toFixed(4)}/unit`);
+    if (sellBoxUsd > 0) parts.push(`wholesale $${sellBoxUsd.toFixed(2)}/box`);
+    if (sellBoxUsd > 0 && costBox > 0) parts.push(`${(((sellBoxUsd - costBox) / sellBoxUsd) * 100).toFixed(1)}% margin`);
+    el.textContent = parts.length > 1 ? parts.join(' — ') : '';
+}
+
+let _qpNameTimer = null;
+function qpNameSearch() {
+    const q    = document.getElementById('qp_name').value.trim();
+    const drop = document.getElementById('qp_name_drop');
+    clearTimeout(_qpNameTimer);
+    if (!q || q.length < 2) { drop.style.display = 'none'; return; }
+    const delay = /^\d{6,}$/.test(q) ? 0 : 300;
+    _qpNameTimer = setTimeout(() => {
+        fetch(`/dahdouh/pages/api.php?action=search_products_purchase&q=${encodeURIComponent(q)}`)
+            .then(r => r.json())
+            .then(results => {
+                if (!results || !results.length) { drop.style.display = 'none'; return; }
+                drop.innerHTML = results.map(p => {
+                    const price = parseFloat(p.sell_price||0).toFixed(2);
+                    const bar   = p.barcode ? `<span class="text-muted ms-1" style="font-size:.7rem">${p.barcode}</span>` : '';
+                    const stock = p.product_type === 'bulk' ? '' : ` · ${parseFloat(p.stock||0)} ${p.unit||''}`;
+                    return `<li class="list-group-item list-group-item-action py-1 px-2 small"
+                                style="cursor:pointer;font-size:.8rem"
+                                onmousedown="qpPickExisting(${JSON.stringify(JSON.stringify(p))})">
+                                <strong>${p.name}</strong>${bar}
+                                <span class="float-end text-success">$${price}${stock}</span>
+                            </li>`;
+                }).join('');
+                drop.style.display = '';
+            })
+            .catch(() => { drop.style.display = 'none'; });
+    }, delay);
+}
+
+function qpPickExisting(pJson) {
+    const p = JSON.parse(pJson);
+    document.getElementById('qp_name_drop').style.display = 'none';
+    bootstrap.Modal.getInstance(document.getElementById('quickAddModal'))?.hide();
+    if (_qpRowIdx !== null) {
+        selectProduct(_qpRowIdx, {
+            id:             p.id,
+            name:           p.name,
+            cost_price:     p.cost_price,
+            sell_price:     p.sell_price,
+            sell_price_box: p.sell_price_box || 0,
+            unit:           p.unit || 'pcs',
+            product_type:   p.product_type || 'regular',
+            units_per_box:  p.units_per_box || 1,
+            is_consignment: p.product_source === 'consignment' ? 1 : 0
+        });
+    }
+}
+
 function saveQuickProduct() {
-    const name = document.getElementById('qp_name').value.trim();
+    const name   = document.getElementById('qp_name').value.trim();
+    const unit   = document.getElementById('qp_unit').value;
+    const isBox  = unit === 'box';
+    const isBulk = ['kg','g','L','mL'].includes(unit);
+    const isCons = document.getElementById('qp_src_cons').checked;
     if (!name) { document.getElementById('qp_error').textContent = 'Name required.'; return; }
-    const costUsd = qpToUsd('qp_cost');
-    const sellUsd = qpToUsd('qp_sell');
+    if (isCons && !document.getElementById('qp_cons_sup').value) { document.getElementById('qp_error').textContent = 'Select consignment supplier.'; return; }
+    if (isCons && !document.getElementById('qp_cons_cost').value) { document.getElementById('qp_error').textContent = 'Enter consignment cost.'; return; }
+    document.getElementById('qp_error').textContent = '';
+    const upb        = isBox ? Math.max(1, parseInt(document.getElementById('qp_upb').value) || 1) : 1;
+    const costBoxRaw = isBox ? (parseFloat(document.getElementById('qp_cost_box').value) || 0) : 0;
+    const costUsd    = isBox ? (costBoxRaw / upb) : qpToUsd('qp_cost');
+    const sellUsd    = qpToUsd('qp_sell');
+    const sellBoxUsd = isBox ? qpToUsd('qp_sell_box') : 0;
     const body = new URLSearchParams({
         name,
-        barcode:     document.getElementById('qp_barcode').value.trim(),
-        unit:        document.getElementById('qp_unit').value,
-        category_id: document.getElementById('qp_cat').value,
-        supplier_id: document.getElementById('qp_sup').value,
-        cost_usd:    costUsd.toFixed(4),
-        sell_usd:    sellUsd.toFixed(4),
+        barcode:                 document.getElementById('qp_barcode').value.trim(),
+        unit,
+        category_id:             document.getElementById('qp_cat').value,
+        supplier_id:             document.getElementById('qp_sup').value,
+        cost_usd:                costUsd.toFixed(4),
+        sell_usd:                sellUsd.toFixed(4),
+        units_per_box:           upb,
+        sell_price_box:          sellBoxUsd > 0 ? sellBoxUsd.toFixed(4) : '',
+        product_type:            isBulk ? 'bulk' : 'regular',
+        product_source:          isCons ? 'consignment' : 'owned',
+        consignment_supplier_id: isCons ? document.getElementById('qp_cons_sup').value : '',
+        consignment_cost:        isCons ? qpToUsd('qp_cons_cost').toFixed(4) : '',
+        stock:                   isBulk ? '0' : (document.getElementById('qp_stock').value || '0'),
+        low_stock_alert:         isBulk ? '0' : (document.getElementById('qp_alert').value || '5'),
     });
     fetch('/dahdouh/pages/api.php?action=create_product_quick', { method:'POST', body })
         .then(r => r.json())
@@ -854,7 +1069,9 @@ function saveQuickProduct() {
             if (_qpRowIdx !== null) {
                 selectProduct(_qpRowIdx, {
                     id: d.id, name: d.name, cost_price: d.cost_price, sell_price: d.sell_price,
-                    unit: d.unit, product_type: 'regular', units_per_box: 1
+                    sell_price_box: d.sell_price_box || 0,
+                    unit: d.unit, product_type: d.product_type, units_per_box: d.units_per_box || 1,
+                    is_consignment: d.product_source === 'consignment' ? 1 : 0
                 });
             }
         })
@@ -934,7 +1151,115 @@ function viewPurchase(id, ref) {
     new bootstrap.Modal(document.getElementById('viewPurchModal')).show();
 }
 
+// ── Edit Purchase ─────────────────────────────────────────────────────────────
+
+let _epPurchaseId = null, _epItems = [];
+
+function editPurchase(id, ref) {
+    _epPurchaseId = id;
+    _epItems = [];
+    document.getElementById('ep-title').textContent = ref;
+    document.getElementById('ep-body').innerHTML = '<div class="text-center py-4"><div class="spinner-border" role="status"></div></div>';
+    new bootstrap.Modal(document.getElementById('editPurchModal')).show();
+    fetch('/dahdouh/pages/api.php?action=get_purchase_for_edit&id=' + id)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) { document.getElementById('ep-body').innerHTML = '<div class="alert alert-danger">' + escHtml(data.error) + '</div>'; return; }
+            _epItems = data.items;
+            renderEpItems(data);
+        })
+        .catch(() => { document.getElementById('ep-body').innerHTML = '<div class="alert alert-danger">Network error</div>'; });
+}
+
+function renderEpItems(data) {
+    let html = `<div class="alert alert-warning py-2 small mb-3"><i class="bi bi-exclamation-triangle me-1"></i>
+        Qty changes adjust stock &amp; batches. Cannot reduce below consumed qty. Cost changes adjust supplier balance &amp; cash register.</div>`;
+    html += '<table class="table table-sm table-bordered"><thead class="table-secondary"><tr><th>Product</th><th>Type</th><th style="width:110px">Qty</th><th style="width:130px">Unit Cost ($)</th><th class="text-end" style="width:100px">Line Total</th></tr></thead><tbody>';
+    data.items.forEach((item, i) => {
+        const isBulk = item.product_type === 'bulk';
+        const consumed = parseFloat(item.qty_consumed) || 0;
+        const minQty = isBulk ? 0 : consumed;
+        const line = isBulk ? parseFloat(item.unit_cost) : (parseFloat(item.quantity) * parseFloat(item.unit_cost));
+        const typeBadge = item.product_type === 'consignment'
+            ? '<span class="badge" style="background:#7c3aed;color:#fff">Consign</span>'
+            : (item.product_type === 'bulk' ? '<span class="badge bg-warning text-dark">Bulk</span>' : '<span class="badge bg-info text-dark">Regular</span>');
+        html += `<tr>
+            <td class="small">${escHtml(item.product_name)}${consumed > 0 && !isBulk ? `<br><small class="text-muted">${consumed} consumed</small>` : ''}</td>
+            <td>${typeBadge}</td>
+            <td>${isBulk ? '<span class="text-muted small">N/A</span>' :
+                `<input type="number" class="form-control form-control-sm" id="ep-qty-${i}" min="${minQty}" step="0.001"
+                    value="${parseFloat(item.quantity)}" onchange="updateEpLine(${i})">`}</td>
+            <td><input type="number" class="form-control form-control-sm" id="ep-cost-${i}" min="0" step="0.0001"
+                value="${parseFloat(item.unit_cost).toFixed(4)}" onchange="updateEpLine(${i})"></td>
+            <td class="text-end fw-bold" id="ep-line-${i}">$${line.toFixed(2)}</td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    html += `<div class="text-end fw-bold">Original total: $${parseFloat(data.total_amount).toFixed(2)} &nbsp; New total: <span class="text-warning" id="ep-new-total">$${parseFloat(data.total_amount).toFixed(2)}</span></div>`;
+    document.getElementById('ep-body').innerHTML = html;
+}
+
+function updateEpLine(i) {
+    const item = _epItems[i];
+    if (!item) return;
+    const isBulk = item.product_type === 'bulk';
+    const qty  = isBulk ? 0 : (parseFloat(document.getElementById('ep-qty-'+i)?.value) || 0);
+    const cost = parseFloat(document.getElementById('ep-cost-'+i)?.value) || 0;
+    const line = isBulk ? cost : qty * cost;
+    const el = document.getElementById('ep-line-'+i);
+    if (el) el.textContent = '$' + line.toFixed(2);
+    let total = 0;
+    _epItems.forEach((_, j) => {
+        const jBulk = _epItems[j].product_type === 'bulk';
+        const jQty  = jBulk ? 0 : (parseFloat(document.getElementById('ep-qty-'+j)?.value) || 0);
+        const jCost = parseFloat(document.getElementById('ep-cost-'+j)?.value) || 0;
+        total += jBulk ? jCost : jQty * jCost;
+    });
+    const nt = document.getElementById('ep-new-total');
+    if (nt) nt.textContent = '$' + total.toFixed(2);
+}
+
+function submitPurchaseEdit() {
+    if (!_epPurchaseId || !_epItems.length) return;
+    const items = _epItems.map((item, i) => {
+        const isBulk = item.product_type === 'bulk';
+        return {
+            id:   item.id,
+            qty:  isBulk ? parseFloat(item.quantity) : (parseFloat(document.getElementById('ep-qty-'+i)?.value) || 0),
+            cost: parseFloat(document.getElementById('ep-cost-'+i)?.value) || 0
+        };
+    });
+    const body = new URLSearchParams({ purchase_id: _epPurchaseId, items: JSON.stringify(items) });
+    fetch('/dahdouh/pages/api.php?action=edit_purchase', { method:'POST', body })
+        .then(r => r.json())
+        .then(d => {
+            if (!d.ok) { alert('Error: ' + (d.error || 'Unknown')); return; }
+            bootstrap.Modal.getInstance(document.getElementById('editPurchModal'))?.hide();
+            const diff = parseFloat(d.diff);
+            alert('Purchase updated.\nNew total: $' + parseFloat(d.new_total).toFixed(2) +
+                  '\nFinancial adjustment: ' + (diff >= 0 ? '+' : '') + '$' + diff.toFixed(2));
+            location.reload();
+        })
+        .catch(() => alert('Network error'));
+}
+
 addPurchRow();
+
+let _purchDrawerCur = 'usd';
+function togglePurchDrawer() {
+    const v = document.getElementById('purch-pay-sel')?.value;
+    document.getElementById('purch-drawer-cur').style.display = v === 'cash_register' ? '' : 'none';
+}
+function setPurchDrawer(cur) {
+    _purchDrawerCur = cur;
+    document.getElementById('pdcur-usd').className = 'btn btn-' + (cur==='usd' ? 'success active' : 'outline-success');
+    document.getElementById('pdcur-lbp').className = 'btn btn-' + (cur==='lbp' ? 'warning active' : 'outline-warning');
+}
+function applyPurchDrawer() {
+    const sel = document.getElementById('purch-pay-sel');
+    if (sel && sel.value === 'cash_register' && _purchDrawerCur === 'lbp') sel.value = 'cash_register_lbp';
+}
+togglePurchDrawer();
 </script>
 
 <?php renderFoot(); ?>

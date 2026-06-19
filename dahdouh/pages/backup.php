@@ -36,6 +36,44 @@ if (isset($_GET['dl'])) {
     $message = 'error:File not found.';
 }
 
+// ── Restore from backup ───────────────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'restore') {
+    header('Content-Type: application/json');
+    $name   = basename($_POST['file'] ?? '');
+    $folder = setting('backup_folder', backupDefaultFolder());
+    $path   = $folder . DIRECTORY_SEPARATOR . $name;
+
+    if (!$name || !file_exists($path) || !preg_match('/\.sql$/', $name)) {
+        echo json_encode(['ok' => false, 'error' => 'Invalid or missing backup file.']); exit;
+    }
+
+    $mysql = 'C:\\xampp\\mysql\\bin\\mysql.exe';
+    if (!file_exists($mysql)) {
+        echo json_encode(['ok' => false, 'error' => 'mysql.exe not found at ' . $mysql]); exit;
+    }
+
+    $host   = DB_HOST;
+    $dbname = DB_NAME;
+    $user   = DB_USER;
+    $pass   = DB_PASS;
+
+    // Build command — password passed via env to avoid shell exposure
+    $cmd = '"' . $mysql . '" --host=' . escapeshellarg($host)
+         . ' --user=' . escapeshellarg($user)
+         . (strlen($pass) ? ' --password=' . escapeshellarg($pass) : '')
+         . ' ' . escapeshellarg($dbname)
+         . ' < "' . $path . '" 2>&1';
+
+    $output = []; $exitCode = 0;
+    exec($cmd, $output, $exitCode);
+
+    if ($exitCode !== 0) {
+        echo json_encode(['ok' => false, 'error' => implode(' ', $output) ?: 'mysql exited with code ' . $exitCode]); exit;
+    }
+    echo json_encode(['ok' => true, 'file' => $name]);
+    exit;
+}
+
 // ── Delete backup file ────────────────────────────────────────────────────────
 if (isset($_GET['del'])) {
     $name   = basename($_GET['del']);
@@ -174,6 +212,12 @@ alertBox($message);
         <td class="small font-monospace text-muted"><?= htmlspecialchars($b['name']) ?></td>
         <td class="small"><?= round($b['size'] / 1024, 1) ?> KB</td>
         <td class="text-end">
+            <?php if ($b['type'] === 'db'): ?>
+            <button class="btn btn-sm btn-outline-warning me-1" title="Restore database from this backup"
+                onclick="restoreBackup('<?= htmlspecialchars(addslashes($b['name'])) ?>', '<?= htmlspecialchars(addslashes($b['date'])) ?>')">
+                <i class="bi bi-arrow-counterclockwise"></i> Restore
+            </button>
+            <?php endif; ?>
             <a href="?dl=<?= urlencode($b['name']) ?>" class="btn btn-sm btn-outline-primary me-1">
                 <i class="bi bi-download"></i>
             </a>
@@ -192,6 +236,44 @@ alertBox($message);
 </div>
 
 <script>
+function restoreBackup(filename, dateLabel) {
+    if (!confirm(
+        '⚠ RESTORE DATABASE FROM BACKUP?\n\n' +
+        'File: ' + filename + '\n' +
+        'Date: ' + dateLabel + '\n\n' +
+        'This will OVERWRITE all current data with the backup.\n' +
+        'This cannot be undone. Make sure you have a recent backup first.\n\n' +
+        'Continue?'
+    )) return;
+
+    const btn = event.target.closest('button');
+    const origHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+    fetch('/dahdouh/pages/backup.php', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'action=restore&file=' + encodeURIComponent(filename)
+    })
+    .then(r => r.json())
+    .then(d => {
+        btn.disabled = false;
+        btn.innerHTML = origHTML;
+        if (d.ok) {
+            alert('✓ Restore complete!\n\nDatabase has been restored from:\n' + d.file + '\n\nThe page will reload.');
+            location.reload();
+        } else {
+            alert('✗ Restore failed:\n\n' + d.error);
+        }
+    })
+    .catch(e => {
+        btn.disabled = false;
+        btn.innerHTML = origHTML;
+        alert('Request failed: ' + e);
+    });
+}
+
 function runBackup() {
     const btn  = document.getElementById('btn-backup');
     const stat = document.getElementById('backup-status');

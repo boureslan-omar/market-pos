@@ -23,7 +23,10 @@ function renderHead($title = '') {
 <title>' . htmlspecialchars($title ? "$title — $store" : $store) . '</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-<link rel="stylesheet" href="/dahdouh/assets/css/pos.css">
+<link rel="stylesheet" href="/dahdouh/assets/css/pos.css?v=' . filemtime(__DIR__.'/../assets/css/pos.css') . '">
+<script>
+(function(){var s=parseFloat(localStorage.getItem("uiScale")||"1");if(s!==1){document.documentElement.style.setProperty("--ui-scale",s);document.documentElement.style.fontSize=(16*s)+"px";}})();
+</script>
 <style>
 :root {
   --brand:' . $brand . ';--brand-dark:' . $dark . ';--brand-accent:' . $accent . ';
@@ -69,29 +72,30 @@ function renderNav($active = '') {
     $fullName = htmlspecialchars($_SESSION['full_name'] ?? '');
 
     echo '<nav class="navbar navbar-expand-lg navbar-dark px-3 no-print" style="background:linear-gradient(135deg,var(--brand-dark) 0%,var(--brand) 100%);box-shadow:0 2px 12px rgba(0,0,0,.4)">
-        <a class="navbar-brand fw-bold d-flex align-items-center" href="/dahdouh/">'
+        <a class="navbar-brand fw-bold d-flex align-items-center flex-shrink-0" href="/dahdouh/">'
         . $logo
         . '<span style="font-size:.95rem;letter-spacing:.3px">' . htmlspecialchars($name) . '</span></a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="nav">
-        <ul class="navbar-nav me-auto">';
-
-    foreach ($allPages as $key => $p) {
-        if (!in_array($role, $p['roles'])) continue;
-        $cls = ($active === $key) ? 'active' : '';
-        echo "<li class=\"nav-item\"><a class=\"nav-link $cls\" href=\"{$p['url']}\"><i class=\"{$p['icon']}\"></i> {$p['label']}</a></li>";
-    }
-
-    echo '</ul>
-        <div class="d-flex align-items-center gap-2 ms-3">
+        <div class="d-flex align-items-center gap-2 flex-shrink-0 ms-auto ms-lg-0 order-lg-last">
             <span class="badge rounded-pill" style="background:'.$roleBadgeColor.';font-size:.7rem">'.$roleLabel.'</span>
-            <span class="text-white-50 small">'.$fullName.'</span>
+            <span class="text-white-50 small d-none d-xl-inline">'.$fullName.'</span>
             <a href="/dahdouh/logout.php" class="btn btn-sm btn-outline-light py-0 px-2" title="Sign out">
                 <i class="bi bi-box-arrow-right"></i>
             </a>
         </div>
+        <button class="navbar-toggler ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse flex-grow-1" id="nav"
+             style="overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.3) transparent">
+        <ul class="navbar-nav" style="flex-wrap:nowrap;min-width:max-content;gap:.2rem;margin-bottom:0">';
+
+    foreach ($allPages as $key => $p) {
+        if (!in_array($role, $p['roles'])) continue;
+        $cls = ($active === $key) ? 'active' : '';
+        echo "<li class=\"nav-item\"><a class=\"nav-link $cls\" href=\"{$p['url']}\" style=\"white-space:nowrap\"><i class=\"{$p['icon']}\"></i> {$p['label']}</a></li>";
+    }
+
+    echo '</ul>
         </div></nav>';
 }
 

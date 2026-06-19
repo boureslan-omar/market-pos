@@ -4,15 +4,36 @@
     --danger:  #ea4335;
     --warning: #fbbc04;
     --dark:    #1f1f1f;
+    --ui-scale: 1;
 }
+
+/* Scaling html font-size causes all Bootstrap rem values to scale proportionally */
+html { font-size: calc(16px * var(--ui-scale)); }
 
 body { background: #f0f2f5; font-family: 'Segoe UI', sans-serif; }
 
 /* ── Nav ── */
 .navbar { box-shadow: 0 2px 8px rgba(0,0,0,.4); }
-.navbar-brand { font-size: 1rem; letter-spacing: .3px; }
-.nav-link { padding: .35rem .75rem; border-radius: 6px; font-size: .85rem; transition: background .15s; }
+.navbar-brand { font-size: 1rem; letter-spacing: .3px; flex-shrink: 0; }
+.nav-link { padding: .35rem .75rem; border-radius: 6px; font-size: .85rem; transition: background .15s; white-space: nowrap; }
 .nav-link:hover, .nav-link.active { background: rgba(255,255,255,.15); }
+
+/* Horizontally scrollable nav at desktop widths — keeps user section pinned right */
+@media (min-width: 992px) {
+    #nav { flex-wrap: nowrap; overflow: hidden; gap: .5rem; }
+    .navbar-scroll-wrap {
+        overflow-x: auto;
+        flex: 1 1 auto;
+        min-width: 0;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,255,255,.3) transparent;
+    }
+    .navbar-scroll-wrap::-webkit-scrollbar { height: 3px; }
+    .navbar-scroll-wrap::-webkit-scrollbar-track { background: transparent; }
+    .navbar-scroll-wrap::-webkit-scrollbar-thumb { background: rgba(255,255,255,.3); border-radius: 3px; }
+    .navbar-scroll-wrap .navbar-nav { flex-wrap: nowrap; min-width: max-content; margin-bottom: 0 !important; gap: .2rem; }
+}
+.navbar-user { flex-shrink: 0; }
 
 /* ── Cards ── */
 .card { border: none; }
@@ -30,7 +51,7 @@ body { background: #f0f2f5; font-family: 'Segoe UI', sans-serif; }
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 6px 4px;
+    padding: calc(var(--ui-scale) * 6px) calc(var(--ui-scale) * 4px);
     overflow: hidden;
     transition: box-shadow .12s, transform .12s, background .1s;
     user-select: none;

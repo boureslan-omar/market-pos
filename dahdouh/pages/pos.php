@@ -13,12 +13,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $cartData   = json_decode($_POST['cart_json'] ?? '{}', true) ?: [];
     $discount   = (float)($_POST['discount'] ?? 0);
     $creditUse  = (float)($_POST['credit_use'] ?? 0);
-    $paidUSD    = (float)($_POST['paid_usd'] ?? 0);
-    $paidLBP    = (float)($_POST['paid_lbp'] ?? 0);
-    $method     = $_POST['payment_method'] ?? 'cash';
-    $note       = trim($_POST['note'] ?? '');
-    $customerId = (int)($_POST['customer_id'] ?? 0) ?: null;
-    $rate       = EXCHANGE_RATE;
+    $paidUSD     = (float)($_POST['paid_usd'] ?? 0);
+    $paidLBP     = (float)($_POST['paid_lbp'] ?? 0);
+    $method      = $_POST['payment_method'] ?? 'cash';
+    $note        = trim($_POST['note'] ?? '');
+    $customerId  = (int)($_POST['customer_id'] ?? 0) ?: null;
+    $debtPayment = max(0, (float)($_POST['debt_payment'] ?? 0));
+    $rate        = EXCHANGE_RATE;
 
     if (empty($cartData)) {
         $message = 'error:Cart is empty.';
@@ -31,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $total      = max(0, $subtotal - $discount - $creditUse);
         $changeCur  = $_POST['change_currency'] ?? 'LBP';
         $totalGiven = $paidUSD + ($paidLBP / $rate);
-        $changeAmt  = max(0, $totalGiven - $total);
+        $changeAmt  = max(0, $totalGiven - $total - $debtPayment);
         $changeUSD  = $changeCur === 'USD' ? round($changeAmt, 2) : 0;
         $changeLBP  = $changeCur === 'LBP' ? round($changeAmt * $rate) : 0;
         $payCur     = ($paidUSD > 0 && $paidLBP > 0) ? 'BOTH' : ($paidLBP > 0 ? 'LBP' : 'USD');
@@ -77,10 +78,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-            // Customer balance: net change = -(subtotal-discount) + cash_paid
-            // = -total - creditUse + netCashPaid (credit consumed reduces balance, cash received increases it)
             if ($customerId) {
-                $netCashPaid  = $totalGiven - $changeAmt; // excludes change given back
+                $netCashPaid  = $totalGiven - $changeAmt;
                 $netBalChange = $total + $creditUse - $netCashPaid;
                 if (abs($netBalChange) > 0.001) {
                     $pdo->prepare("UPDATE customers SET balance = balance - ? WHERE id=?")->execute([$netBalChange, $customerId]);
@@ -92,9 +91,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $pdo->prepare("INSERT INTO customer_ledger (customer_id, sale_id, type, amount, note) VALUES (?,?,?,?,?)")
                         ->execute([$customerId, $saleId, 'payment', $creditUse, "Store credit applied — #$receipt"]);
                 }
-                if ($netCashPaid > 0) {
+                $cashForSale = $netCashPaid - $debtPayment;
+                if ($cashForSale > 0.001) {
                     $pdo->prepare("INSERT INTO customer_ledger (customer_id, sale_id, type, amount, note) VALUES (?,?,?,?,?)")
-                        ->execute([$customerId, $saleId, 'payment', $netCashPaid, "Payment for #$receipt"]);
+                        ->execute([$customerId, $saleId, 'payment', $cashForSale, "Payment for #$receipt"]);
+                }
+                if ($debtPayment > 0.001) {
+                    $pdo->prepare("INSERT INTO customer_ledger (customer_id, sale_id, type, amount, note) VALUES (?,?,?,?,?)")
+                        ->execute([$customerId, $saleId, 'payment', $debtPayment, "Debt settlement — #$receipt"]);
                 }
             }
 
@@ -117,6 +121,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $si = $pdo->prepare("SELECT * FROM sale_items WHERE sale_id=?");
             $si->execute([$saleId]);
             $lastSale['items'] = $si->fetchAll();
+
+            // Debt settlement amount for receipt display
+            $ds = $pdo->prepare("SELECT COALESCE(SUM(amount),0) FROM customer_ledger WHERE sale_id=? AND note LIKE 'Debt settlement%'");
+            $ds->execute([$saleId]);
+            $lastSale['debt_settled'] = (float)$ds->fetchColumn();
 
             if ($customerId) {
                 $cs = $pdo->prepare("SELECT * FROM customers WHERE id=?");
@@ -218,6 +227,11 @@ renderNav('pos');
     <?php if ($lastSale['change_lbp']>0): ?>
     <div class="d-flex justify-content-between text-success fw-bold"><span>Change (LBP)</span><span><?= fmtLBP($lastSale['change_lbp']) ?></span></div>
     <?php endif; ?>
+    <?php if (($lastSale['debt_settled'] ?? 0) > 0): ?>
+    <div class="d-flex justify-content-between small text-warning fw-semibold">
+        <span>Debt Settled</span><span><?= fmtLBP($lastSale['debt_settled'] * EXCHANGE_RATE) ?></span>
+    </div>
+    <?php endif; ?>
     <?php if ($lastCustomer): ?>
     <hr>
     <div class="small text-center">
@@ -231,14 +245,39 @@ renderNav('pos');
     <div class="text-center text-muted small mt-3">Thank you!</div>
 </div>
 <div class="modal-footer no-print">
-    <button class="btn btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+    <button class="btn btn-outline-secondary" onclick="printPosReceipt()"><i class="bi bi-printer me-1"></i>Print</button>
     <a href="/dahdouh/pages/pos.php" class="btn btn-primary">New Sale</a>
 </div>
 </div>
 </div>
 </div>
 <script>
-<?php if ($autoPrint): ?>window.addEventListener('load', () => setTimeout(window.print, 500));<?php endif; ?>
+function printPosReceipt() {
+    const body = document.querySelector('.modal-body.receipt');
+    if (!body) return;
+    const win = window.open('', '_blank', 'width=320,height=600,scrollbars=yes');
+    win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Receipt</title>' +
+        '<style>' +
+        '@page{size:80mm auto;margin:3mm 4mm}' +
+        '*{color:#000!important;background:transparent!important}' +
+        'body{font-family:"Courier New",Courier,monospace;font-size:12px;width:72mm;margin:0;padding:0}' +
+        'img{max-width:60mm;height:auto;display:block;margin:0 auto 4px}' +
+        'table{width:100%;border-collapse:collapse}' +
+        'th{font-size:11px;border-bottom:1px dashed #000;padding:2px 0;text-align:left}' +
+        'td{font-size:11px;padding:2px 0;vertical-align:top}' +
+        '.text-end{text-align:right}.text-center{text-align:center}' +
+        '.fw-bold{font-weight:bold}.fw-semibold{font-weight:600}.fs-5{font-size:13px}' +
+        '.d-flex{display:flex}.justify-content-between{justify-content:space-between}' +
+        'hr{border:none;border-top:1px dashed #000;margin:4px 0}' +
+        '.small{font-size:10px}.mt-1{margin-top:2px}.mt-2{margin-top:4px}.mt-3{margin-top:6px}' +
+        '.mb-0{margin-bottom:0}.mb-3{margin-bottom:6px}' +
+        '.bi{display:none}' +
+        '</style></head><body>' + body.innerHTML +
+        '<script>window.onload=function(){window.print();}<\/script>' +
+        '</body></html>');
+    win.document.close();
+}
+<?php if ($autoPrint): ?>window.addEventListener('load', () => setTimeout(printPosReceipt, 500));<?php endif; ?>
 </script>
 
 <?php else: ?>
@@ -302,16 +341,20 @@ renderNav('pos');
                 <div style="font-size:.55rem;font-weight:700;color:#fff;background:#7c3aed;border-radius:3px;padding:1px 4px;margin-bottom:3px;display:inline-block">CONSIGN</div>
             <?php endif; ?>
             <div class="prod-name"><?= htmlspecialchars($p['name']) ?></div>
-            <div class="prod-price"><?= fmtUSD($p['sell_price']) ?></div>
+            <div class="prod-price"><?= fmtUSD($p['sell_price']) ?><?php if (($p['sell_price_box'] ?? 0) > 0 && ($p['units_per_box'] ?? 1) > 1): ?><span style="font-size:.65rem;font-weight:400;opacity:.65"> /pcs</span><?php endif; ?></div>
             <div class="prod-lbp"><?= fmtLBP($p['sell_price'] * $rate) ?></div>
             <?php if ($isBulk): ?>
                 <div class="prod-stock" style="color:#6c757d">tap to enter price</div>
             <?php elseif ($outStock): ?>
                 <div class="prod-stock" style="color:#dc3545">out of stock</div>
             <?php elseif ($lowStock): ?>
-                <div class="prod-stock" style="color:#f59e0b"><?= (float)$p['stock'] ?> <?= htmlspecialchars($p['unit']) ?> left</div>
+                <div class="prod-stock" style="color:#f59e0b">
+                    <?php if (($p['units_per_box'] ?? 1) > 1): ?><?= floor((float)$p['stock'] / (int)$p['units_per_box']) ?> box · <?= (float)$p['stock'] ?> units left<?php else: ?><?= (float)$p['stock'] ?> <?= htmlspecialchars($p['unit']) ?> left<?php endif; ?>
+                </div>
             <?php else: ?>
-                <div class="prod-stock" style="color:#22c55e"><?= (float)$p['stock'] ?> <?= htmlspecialchars($p['unit']) ?></div>
+                <div class="prod-stock" style="color:#22c55e">
+                    <?php if (($p['units_per_box'] ?? 1) > 1): ?><?= floor((float)$p['stock'] / (int)$p['units_per_box']) ?> box · <?= (float)$p['stock'] ?> units<?php else: ?><?= (float)$p['stock'] ?> <?= htmlspecialchars($p['unit']) ?><?php endif; ?>
+                </div>
             <?php endif; ?>
             <?php if (!$isBulk && !$outStock && ($p['sell_price_box'] ?? 0) > 0 && ($p['units_per_box'] ?? 1) > 1): ?>
             <button type="button" onclick="event.stopPropagation();tileBoxClick(this.closest('.prod-card'))"
@@ -381,6 +424,12 @@ renderNav('pos');
     <button type="button" class="btn btn-outline-danger w-100 mt-1 btn-sm" onclick="clearCart()">
         <i class="bi bi-trash me-1"></i>Clear Cart
     </button>
+    <button type="button" class="btn btn-outline-warning w-100 mt-1 btn-sm" onclick="holdSale()">
+        <i class="bi bi-pause-circle me-1"></i>Hold Sale
+    </button>
+    <button type="button" id="held-btn" class="btn btn-warning w-100 mt-1 btn-sm" onclick="openHeldSales()" style="display:none">
+        <i class="bi bi-clock-history me-1"></i>Held Sales <span id="held-badge" class="badge bg-danger ms-1">0</span>
+    </button>
     <form method="POST" id="sale-form" onsubmit="return prepareSubmit()">
         <input type="hidden" name="cart_json"       id="cart-json">
         <input type="hidden" name="discount"        id="hd-discount">
@@ -392,6 +441,7 @@ renderNav('pos');
         <input type="hidden" name="payment_method"  id="hd-method" value="cash">
         <input type="hidden" name="customer_id"     id="hd-customer">
         <input type="hidden" name="note"            id="hd-note">
+        <input type="hidden" name="debt_payment"    id="hd-debt" value="0">
     </form>
 </div>
 
@@ -427,6 +477,34 @@ renderNav('pos');
                 <button type="button" class="btn btn-outline-success" data-m="card" onclick="setModalMethod(this,'card')"><i class="bi bi-credit-card me-1"></i>Card</button>
                 <button type="button" class="btn btn-outline-success" data-m="mobile" onclick="setModalMethod(this,'mobile')"><i class="bi bi-phone me-1"></i>Mobile</button>
                 <button type="button" class="btn btn-outline-success" data-m="account" onclick="setModalMethod(this,'account')"><i class="bi bi-person-check me-1"></i>Account</button>
+            </div>
+        </div>
+
+        <!-- Debt settlement (shown only when customer has a debt) -->
+        <div id="modal-debt-section" class="mb-4 d-none">
+            <label class="form-label fw-semibold text-muted small">DEBT SETTLEMENT</label>
+            <div class="card border-danger p-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div>
+                        <span class="text-danger fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>Owes:
+                            <span id="modal-debt-balance-usd">$0.00</span>
+                            <span id="modal-debt-balance-lbp" class="d-none">0 LL</span>
+                        </span>
+                        <div class="small text-muted">Remaining after: <span id="modal-debt-remaining" class="fw-bold text-warning">$0.00</span></div>
+                    </div>
+                    <div class="d-flex gap-2 align-items-center">
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-success active" id="debt-cur-usd" onclick="setDebtCur('usd')">$ USD</button>
+                            <button type="button" class="btn btn-outline-warning" id="debt-cur-lbp" onclick="setDebtCur('lbp')">LL LBP</button>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="applyMaxDebt()">Pay All</button>
+                    </div>
+                </div>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text text-danger fw-bold" id="debt-input-prefix">$</span>
+                    <input type="number" id="modal-debt-input" class="form-control" placeholder="0.00" min="0" step="0.01" oninput="calcModalChange()">
+                    <span class="input-group-text small">applied to debt</span>
+                </div>
             </div>
         </div>
 
@@ -522,6 +600,22 @@ renderNav('pos');
 </div>
 </div>
 
+<!-- Held Sales Modal -->
+<div class="modal fade" id="heldSalesModal" tabindex="-1">
+<div class="modal-dialog">
+<div class="modal-content">
+    <div class="modal-header py-2">
+        <h5 class="modal-title"><i class="bi bi-clock-history me-2"></i>Held Sales</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body" id="held-sales-list"></div>
+    <div class="modal-footer py-2">
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+    </div>
+</div>
+</div>
+</div>
+
 <?php endif; // not lastSale ?>
 
 <script>
@@ -573,12 +667,11 @@ function tileBoxClick(el) {
     const cost     = parseFloat(el.dataset.cost);
     const stock    = parseFloat(el.dataset.stock);
     const upb      = parseInt(el.dataset.upb || 1);
-    if (stock < upb) { showToast('Not enough stock for a full box', 'warning'); return; }
-    const cartKey = id + '_b';
+    const cartKey  = id + '_b';
+    const alreadyUsed = (cart[id]?.qty || 0) + (cart[cartKey]?.qty || 0);
+    if (stock - alreadyUsed < upb) { showToast('Not enough stock for a full box', 'warning'); return; }
     if (cart[cartKey]) {
-        const newQty = cart[cartKey].qty + upb;
-        if (newQty > stock) { showToast('Max stock reached', 'warning'); return; }
-        cart[cartKey].qty = newQty;
+        cart[cartKey].qty += upb;
     } else {
         cart[cartKey] = { pid: id, name, price: boxPrice, cost, qty: upb, stock, type: 'regular', isBox: true, upb };
     }
@@ -651,10 +744,16 @@ function addToCartFlash(el, id, name, price, cost, stock, type) {
 function addToCart(id, name, price, cost, stock, type = 'regular', forceQty = null) {
     id = String(id);
     if (cart[id] && type !== 'bulk') {
-        if (type === 'regular' && cart[id].qty >= stock) { showToast('No more stock','warning'); return; }
+        if (type === 'regular') {
+            const used = cart[id].qty + (cart[id + '_b']?.qty || 0);
+            if (used >= stock) { showToast('No more stock','warning'); return; }
+        }
         cart[id].qty = parseFloat((cart[id].qty + 1).toFixed(3));
     } else {
-        if (type === 'regular' && stock < 1) { showToast('Out of stock','danger'); return; }
+        if (type === 'regular') {
+            const usedByBox = cart[id + '_b']?.qty || 0;
+            if (stock - usedByBox < 1) { showToast('Out of stock','danger'); return; }
+        }
         cart[id] = { name, price: parseFloat(price), cost: parseFloat(cost), qty: forceQty || 1, stock: parseFloat(stock)||999, type };
     }
     if (forceQty !== null) cart[id].qty = forceQty;
@@ -665,7 +764,11 @@ function changeQty(id, delta) {
     if (!cart[id]) return;
     const newQty = parseFloat((cart[id].qty + delta).toFixed(3));
     if (newQty <= 0) { delete cart[id]; }
-    else if (cart[id].type === 'regular' && newQty > cart[id].stock) { showToast('Max stock reached','warning'); return; }
+    else if (cart[id].type === 'regular') {
+        const otherKey = id.endsWith('_b') ? id.slice(0, -2) : id + '_b';
+        if (newQty + (cart[otherKey]?.qty || 0) > cart[id].stock) { showToast('Max stock reached','warning'); return; }
+        cart[id].qty = newQty;
+    }
     else { cart[id].qty = newQty; }
     renderCart();
 }
@@ -724,7 +827,11 @@ function renderCart() {
 function setQty(id, val) {
     val = parseFloat(val);
     if (!val || val <= 0) { delete cart[id]; renderCart(); return; }
-    if (cart[id].type === 'regular' && val > cart[id].stock) { val = cart[id].stock; showToast('Max stock reached','warning'); }
+    if (cart[id].type === 'regular') {
+        const otherKey = id.endsWith('_b') ? id.slice(0, -2) : id + '_b';
+        const maxAllowed = cart[id].stock - (cart[otherKey]?.qty || 0);
+        if (val > maxAllowed) { val = Math.max(0, maxAllowed); showToast('Max stock reached','warning'); }
+    }
     cart[id].qty = parseFloat(val.toFixed(3));
     renderCart();
 }
@@ -775,28 +882,62 @@ function updateTotals(subtotal) {
 // ─── Checkout Modal ───────────────────────────────────────────────────────────
 let modalMethod   = 'cash';
 let modalChangeCur = 'LBP';
+let debtCur       = 'usd';
 
 function openCheckout() {
     if (Object.keys(cart).length === 0) { showToast('Cart is empty','warning'); return; }
     const totalUSD = parseFloat(document.getElementById('total-usd').textContent.replace('$','').replace(/,/g,'')) || 0;
     document.getElementById('modal-total-usd').textContent = formatUSD(totalUSD);
     document.getElementById('modal-total-lbp').textContent = formatLBP(totalUSD * EXCHANGE_RATE);
-    document.getElementById('modal-due-usd2').textContent  = formatUSD(totalUSD);
-    document.getElementById('modal-due-lbp2').textContent  = formatLBP(totalUSD * EXCHANGE_RATE);
     document.getElementById('modal-paid-usd').value = '';
     document.getElementById('modal-paid-lbp').value = '';
     document.getElementById('modal-note').value = document.getElementById('sale-note')?.value || '';
+
+    // Debt settlement section
+    const custBal = selectedCustomer ? parseFloat(selectedCustomer.balance) : 0;
+    const debtSection = document.getElementById('modal-debt-section');
+    const debtInput   = document.getElementById('modal-debt-input');
+    if (custBal < -0.001) {
+        debtSection.classList.remove('d-none');
+        document.getElementById('modal-debt-balance-usd').textContent = formatUSD(Math.abs(custBal));
+        document.getElementById('modal-debt-balance-lbp').textContent = formatLBP(Math.abs(custBal) * EXCHANGE_RATE);
+        debtInput.value = '';
+        debtCur = 'usd';
+        setDebtCur('usd');
+    } else {
+        debtSection.classList.add('d-none');
+        if (debtInput) debtInput.value = '';
+    }
+
     calcModalChange();
     new bootstrap.Modal(document.getElementById('checkoutModal')).show();
     setTimeout(() => document.getElementById('modal-paid-usd').focus(), 350);
 }
 
 function calcModalChange() {
-    const totalDue = parseFloat(document.getElementById('modal-total-usd').textContent.replace('$','').replace(/,/g,'')) || 0;
-    const paidUSD  = parseFloat(document.getElementById('modal-paid-usd')?.value || 0);
-    const paidLBP  = parseFloat(document.getElementById('modal-paid-lbp')?.value || 0);
-    const givenUSD = paidUSD + (paidLBP / EXCHANGE_RATE);
-    const remaining = givenUSD - totalDue;
+    const totalDue    = parseFloat(document.getElementById('modal-total-usd').textContent.replace('$','').replace(/,/g,'')) || 0;
+    const debtRaw     = parseFloat(document.getElementById('modal-debt-input')?.value || 0);
+    const debtPayment = debtCur === 'lbp' ? debtRaw / EXCHANGE_RATE : debtRaw;
+    const totalReq    = totalDue + debtPayment;
+    const paidUSD     = parseFloat(document.getElementById('modal-paid-usd')?.value || 0);
+    const paidLBP     = parseFloat(document.getElementById('modal-paid-lbp')?.value || 0);
+    const givenUSD    = paidUSD + (paidLBP / EXCHANGE_RATE);
+    const remaining   = givenUSD - totalReq;
+
+    // Update due line to show total required (sale + debt)
+    document.getElementById('modal-due-usd2').textContent = formatUSD(totalReq);
+    document.getElementById('modal-due-lbp2').textContent = formatLBP(totalReq * EXCHANGE_RATE);
+
+    // Update debt remaining preview
+    const custBal   = selectedCustomer ? parseFloat(selectedCustomer.balance) : 0;
+    const debtRemEl = document.getElementById('modal-debt-remaining');
+    if (debtRemEl && custBal < 0) {
+        const remDebt = Math.abs(custBal) - debtPayment;
+        debtRemEl.textContent = debtCur === 'lbp'
+            ? formatLBP(Math.max(0, remDebt) * EXCHANGE_RATE)
+            : formatUSD(Math.max(0, remDebt));
+        debtRemEl.className  = 'fw-bold ' + (remDebt <= 0.001 ? 'text-success' : 'text-warning');
+    }
 
     document.getElementById('modal-given-usd').textContent = formatUSD(givenUSD);
     document.getElementById('modal-given-lbp').textContent = formatLBP(givenUSD * EXCHANGE_RATE);
@@ -846,6 +987,31 @@ function setModalMethod(btn, method) {
     document.getElementById('modal-cash-section').style.display = showCash ? '' : 'none';
 }
 
+function applyMaxDebt() {
+    if (!selectedCustomer) return;
+    const custBal = parseFloat(selectedCustomer.balance);
+    if (custBal >= 0) return;
+    const inp = document.getElementById('modal-debt-input');
+    if (!inp) return;
+    inp.value = debtCur === 'lbp'
+        ? Math.round(Math.abs(custBal) * EXCHANGE_RATE)
+        : Math.abs(custBal).toFixed(2);
+    calcModalChange();
+}
+
+function setDebtCur(cur) {
+    debtCur = cur;
+    const isLBP = cur === 'lbp';
+    document.getElementById('debt-cur-usd').className = isLBP ? 'btn btn-outline-success' : 'btn btn-success active';
+    document.getElementById('debt-cur-lbp').className = isLBP ? 'btn btn-warning active' : 'btn btn-outline-warning';
+    document.getElementById('debt-input-prefix').textContent = isLBP ? 'LL' : '$';
+    const inp = document.getElementById('modal-debt-input');
+    if (inp) { inp.step = isLBP ? '1000' : '0.01'; inp.placeholder = isLBP ? '0' : '0.00'; inp.value = ''; }
+    document.getElementById('modal-debt-balance-usd').className = isLBP ? 'd-none' : '';
+    document.getElementById('modal-debt-balance-lbp').className = isLBP ? '' : 'd-none';
+    calcModalChange();
+}
+
 function setChangeCur(btn, cur) {
     modalChangeCur = cur;
     document.querySelectorAll('#modal-changecur-switch button').forEach(b => {
@@ -861,11 +1027,13 @@ function confirmCheckout() {
     if (Object.keys(cart).length === 0) { showToast('Cart is empty','warning'); return; }
     let paidUSD = parseFloat(document.getElementById('modal-paid-usd')?.value || 0);
     let paidLBP = parseFloat(document.getElementById('modal-paid-lbp')?.value || 0);
-    // If cashier left both amounts at zero for a cash sale, treat as exact USD payment
+    // If cashier left both amounts at zero for a cash sale, auto-fill sale total + any debt being settled
+    const debtRaw = parseFloat(document.getElementById('modal-debt-input')?.value || 0);
+    const debtUSD = debtCur === 'lbp' ? debtRaw / EXCHANGE_RATE : debtRaw;
     if (modalMethod === 'cash' && paidUSD === 0 && paidLBP === 0) {
         const totalDue = parseFloat(document.getElementById('modal-total-usd').textContent.replace('$','').replace(/,/g,'')) || 0;
-        paidUSD = totalDue;
-        document.getElementById('modal-paid-usd').value = totalDue.toFixed(2);
+        paidUSD = totalDue + debtUSD;
+        document.getElementById('modal-paid-usd').value = paidUSD.toFixed(2);
     }
     document.getElementById('hd-paid-usd').value   = paidUSD;
     document.getElementById('hd-paid-lbp').value   = paidLBP;
@@ -873,6 +1041,7 @@ function confirmCheckout() {
     document.getElementById('hd-change-cur').value = modalChangeCur;
     document.getElementById('hd-currency').value   = (paidUSD > 0 && paidLBP > 0) ? 'BOTH' : (paidLBP > 0 ? 'LBP' : 'USD');
     document.getElementById('hd-note').value       = document.getElementById('modal-note')?.value || '';
+    document.getElementById('hd-debt').value       = debtUSD.toFixed(2);
     document.getElementById('sale-form').requestSubmit();
 }
 
@@ -978,7 +1147,129 @@ function showToast(msg, type = 'info') {
     setTimeout(() => document.getElementById(id)?.remove(), 3000);
 }
 
+// ─── Hold / Resume ────────────────────────────────────────────────────────────
+function buildHoldSnapshot() {
+    return {
+        id: Date.now(),
+        time: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}),
+        cart: JSON.parse(JSON.stringify(cart)),
+        customer: selectedCustomer,
+        customerText: document.getElementById('cust-search').value,
+        discount: document.getElementById('discount-input').value,
+        discPctMode,
+        note: document.getElementById('sale-note').value,
+        credit: document.getElementById('credit-input').value
+    };
+}
+
+function holdSale(silent = false) {
+    if (Object.keys(cart).length === 0) { if (!silent) showToast('Cart is empty', 'warning'); return false; }
+    const held = JSON.parse(localStorage.getItem('heldSales') || '[]');
+    if (held.length >= 5) { showToast('Maximum 5 held sales — resume or discard one first', 'warning'); return false; }
+    held.push(buildHoldSnapshot());
+    localStorage.setItem('heldSales', JSON.stringify(held));
+    Object.keys(cart).forEach(k => delete cart[k]);
+    clearCustomer();
+    document.getElementById('discount-input').value = 0;
+    if (discPctMode) toggleDiscMode();
+    document.getElementById('sale-note').value = '';
+    renderCart();
+    updateHeldBadge();
+    if (!silent) showToast('Sale held — cart ready for next customer', 'success');
+    return true;
+}
+
+function updateHeldBadge() {
+    const held = JSON.parse(localStorage.getItem('heldSales') || '[]');
+    const btn  = document.getElementById('held-btn');
+    const badge = document.getElementById('held-badge');
+    if (!btn) return;
+    if (held.length > 0) {
+        badge.textContent = held.length;
+        btn.style.display = '';
+    } else {
+        btn.style.display = 'none';
+    }
+}
+
+function openHeldSales() {
+    const held = JSON.parse(localStorage.getItem('heldSales') || '[]');
+    if (!held.length) { showToast('No held sales', 'info'); return; }
+    const listEl = document.getElementById('held-sales-list');
+    listEl.innerHTML = held.map(h => {
+        const names = Object.values(h.cart).map(i => i.name).join(', ');
+        const sub   = Object.values(h.cart).reduce((s, i) => s + i.price * i.qty, 0);
+        const label = h.customer ? h.customer.name : 'Cash Sale';
+        return `<div class="card mb-2">
+            <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <div style="min-width:0">
+                        <div class="fw-bold">${h.time} — ${label}</div>
+                        <div class="small text-muted" style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${names}</div>
+                        <div class="small text-primary fw-bold mt-1">${formatUSD(sub)}</div>
+                    </div>
+                    <div class="d-flex flex-column gap-1 flex-shrink-0">
+                        <button class="btn btn-sm btn-success" onclick="resumeSale(${h.id})"><i class="bi bi-play-fill me-1"></i>Resume</button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="discardHeld(${h.id})">Discard</button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+    new bootstrap.Modal(document.getElementById('heldSalesModal')).show();
+}
+
+function resumeSale(holdId) {
+    const held = JSON.parse(localStorage.getItem('heldSales') || '[]');
+    const snapshot = held.find(h => h.id === holdId);
+    if (!snapshot) return;
+
+    if (Object.keys(cart).length > 0) {
+        const othersCount = held.filter(h => h.id !== holdId).length;
+        if (othersCount < 5) {
+            if (confirm('Hold current cart and resume the held sale?\n\nOK = Hold current\nCancel = Discard current')) {
+                holdSale(true);
+            } else {
+                if (!confirm('Discard current cart and resume?')) return;
+            }
+        } else {
+            if (!confirm('Discard current cart and resume held sale?')) return;
+        }
+    }
+
+    bootstrap.Modal.getInstance(document.getElementById('heldSalesModal'))?.hide();
+    Object.keys(cart).forEach(k => delete cart[k]);
+    Object.assign(cart, snapshot.cart);
+
+    if (snapshot.customer) {
+        selectCustomer(snapshot.customer);
+    } else {
+        clearCustomer();
+    }
+
+    document.getElementById('discount-input').value = snapshot.discount || 0;
+    if (!!snapshot.discPctMode !== discPctMode) toggleDiscMode();
+    document.getElementById('sale-note').value = snapshot.note || '';
+    if (parseFloat(snapshot.credit) > 0) document.getElementById('credit-input').value = snapshot.credit;
+
+    const newHeld = JSON.parse(localStorage.getItem('heldSales') || '[]').filter(h => h.id !== holdId);
+    localStorage.setItem('heldSales', JSON.stringify(newHeld));
+    updateHeldBadge();
+    renderCart();
+    showToast('Sale resumed', 'success');
+}
+
+function discardHeld(holdId) {
+    if (!confirm('Discard this held sale?')) return;
+    bootstrap.Modal.getInstance(document.getElementById('heldSalesModal'))?.hide();
+    const newHeld = JSON.parse(localStorage.getItem('heldSales') || '[]').filter(h => h.id !== holdId);
+    localStorage.setItem('heldSales', JSON.stringify(newHeld));
+    updateHeldBadge();
+    if (newHeld.length > 0) setTimeout(openHeldSales, 300);
+}
+
 renderCart();
+updateHeldBadge();
 </script>
 
 <?php renderFoot(); ?>

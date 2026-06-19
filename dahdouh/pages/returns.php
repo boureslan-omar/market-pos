@@ -131,6 +131,16 @@ renderNav('returns');
             <label class="form-label small fw-bold">Note (optional)</label>
             <input type="text" id="sr-note" class="form-control form-control-sm" placeholder="Reason for return">
         </div>
+        <div class="mb-2">
+            <label class="form-label small fw-bold">Refund Method</label>
+            <div class="btn-group btn-group-sm w-100">
+                <input type="radio" class="btn-check" name="sr-refund" id="sr-refund-credit" value="credit" checked onchange="updateSrPreview()">
+                <label class="btn btn-outline-success" for="sr-refund-credit"><i class="bi bi-arrow-down-circle me-1"></i>Credit to Balance</label>
+                <input type="radio" class="btn-check" name="sr-refund" id="sr-refund-cash" value="cash" onchange="updateSrPreview()">
+                <label class="btn btn-outline-primary" for="sr-refund-cash"><i class="bi bi-cash me-1"></i>Cash Refund from Supplier</label>
+            </div>
+            <div class="form-text text-muted" style="font-size:.72rem">Credit: reduces what you owe the supplier. Cash: supplier gives cash, deposited to register.</div>
+        </div>
         <div id="sr-credit-preview" class="alert alert-info py-2 small" style="display:none"></div>
         <div class="text-danger small mt-1" id="sr-error"></div>
         <button class="btn btn-warning btn-sm mt-2 w-100" onclick="submitSupplierReturn()">
@@ -209,6 +219,7 @@ let _crSaleItemId  = null;
 let _crMaxQty      = 0;
 let _crUnitPrice   = 0;
 let _srBatchId     = null;
+let _srSupplierId  = null;
 let _srBatchCost   = 0;
 let _srMaxQty      = 0;
 
@@ -430,9 +441,10 @@ function searchBatches() {
 }
 
 function selectBatch(b) {
-    _srBatchId   = b.id;
-    _srBatchCost = parseFloat(b.cost_price);
-    _srMaxQty    = parseFloat(b.quantity_remaining);
+    _srBatchId    = b.id;
+    _srSupplierId = b.supplier_id || null;
+    _srBatchCost  = parseFloat(b.cost_price);
+    _srMaxQty     = parseFloat(b.quantity_remaining);
     document.getElementById('sr-batch-label').textContent = `Batch #${b.id} — ${b.product_name}`;
     document.getElementById('sr-batch-info').innerHTML = `
         Supplier: <strong>${escHtml(b.supplier_name||'—')}</strong> ·
@@ -447,17 +459,22 @@ function selectBatch(b) {
     document.getElementById('sr-batch-panel').style.display = '';
 }
 
-document.getElementById('sr-qty')?.addEventListener('input', function() {
-    const qty    = parseFloat(this.value) || 0;
+function updateSrPreview() {
+    const qty    = parseFloat(document.getElementById('sr-qty')?.value) || 0;
     const credit = qty * _srBatchCost;
     const prev   = document.getElementById('sr-credit-preview');
+    const isCash = document.getElementById('sr-refund-cash')?.checked;
     if (qty > 0) {
         prev.style.display = '';
-        prev.innerHTML = `Credit to supplier: <strong>$${credit.toFixed(2)}</strong> (${qty} × $${_srBatchCost.toFixed(4)})`;
+        prev.className = 'alert py-2 small ' + (isCash ? 'alert-primary' : 'alert-info');
+        prev.innerHTML = isCash
+            ? `Cash deposit to register: <strong>$${credit.toFixed(2)}</strong> (${qty} × $${_srBatchCost.toFixed(4)})`
+            : `Credit to supplier balance: <strong>$${credit.toFixed(2)}</strong> (${qty} × $${_srBatchCost.toFixed(4)})`;
     } else {
         prev.style.display = 'none';
     }
-});
+}
+document.getElementById('sr-qty')?.addEventListener('input', updateSrPreview);
 
 function clearBatchSelection() {
     document.getElementById('sr-batch-panel').style.display = 'none';
@@ -471,12 +488,14 @@ function submitSupplierReturn() {
     if (!_srBatchId) { document.getElementById('sr-error').textContent = 'Select a batch first.'; return; }
     if (!qty || qty <= 0) { document.getElementById('sr-error').textContent = 'Enter a valid quantity.'; return; }
     if (qty > _srMaxQty) { document.getElementById('sr-error').textContent = `Max returnable: ${_srMaxQty}`; return; }
-    const body = new URLSearchParams({ batch_id: _srBatchId, quantity: qty, note });
+    const refundMethod = document.querySelector('input[name="sr-refund"]:checked')?.value || 'credit';
+    const body = new URLSearchParams({ batch_id: _srBatchId, supplier_id: _srSupplierId || '', quantity: qty, note, refund_method: refundMethod });
     fetch('/dahdouh/pages/api.php?action=process_supplier_return', { method:'POST', body })
         .then(r => r.json())
         .then(d => {
             if (!d.ok) { document.getElementById('sr-error').textContent = d.error||'Error'; return; }
-            alert(`Supplier return processed. Credit: $${parseFloat(d.credit).toFixed(2)}`);
+            const label = refundMethod === 'cash' ? 'Cash deposited to register' : 'Credit applied to supplier balance';
+            alert(`Supplier return processed.\n${label}: $${parseFloat(d.credit).toFixed(2)}`);
             location.reload();
         })
         .catch(() => { document.getElementById('sr-error').textContent = 'Network error.'; });

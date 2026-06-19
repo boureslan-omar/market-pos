@@ -167,8 +167,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'recei
                         }
                         $pdo->prepare("INSERT INTO purchase_items (purchase_id,product_id,product_name,product_type,quantity,unit_cost,total,batch_id,batch_action) VALUES (?,?,?,'regular',?,?,?,?,?)")
                             ->execute([$purchaseId,$pid,$pname,$totalUnits,round($costPerUnit,4),round($lineTotal,2),$batchId,$batchAction]);
-                        $newSell = (float)($pi['sell'] ?? 0);
-                        if ($newSell > 0) {
+                        $newSell    = (float)($pi['sell'] ?? 0);
+                        $newSellBox = (float)($pi['sell_box'] ?? 0);
+                        if ($newSell > 0 && $newSellBox > 0) {
+                            $pdo->prepare("UPDATE products SET stock=stock+?, cost_price=?, sell_price=?, sell_price_box=? WHERE id=?")->execute([$totalUnits,round($costPerUnit,4),$newSell,$newSellBox,$pid]);
+                        } elseif ($newSell > 0) {
                             $pdo->prepare("UPDATE products SET stock=stock+?, cost_price=?, sell_price=? WHERE id=?")->execute([$totalUnits,round($costPerUnit,4),$newSell,$pid]);
                         } else {
                             $pdo->prepare("UPDATE products SET stock=stock+?, cost_price=? WHERE id=?")->execute([$totalUnits,round($costPerUnit,4),$pid]);
@@ -197,14 +200,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'recei
                     // New product (no product_id) — auto-create with chosen type
                     $newSrc    = (trim($pi['new_src'] ?? '') === 'consignment') ? 'consignment' : 'regular';
                     $dbSrc     = ($newSrc === 'consignment') ? 'consignment' : 'owned';
-                    $newSell   = (float)($pi['sell'] ?? 0);
-                    $conSuppId = ($newSrc === 'consignment') ? $po['supplier_id'] : null;
+                    $newSell    = (float)($pi['sell'] ?? 0);
+                    $newSellBox = (float)($pi['sell_box'] ?? 0);
+                    $conSuppId  = ($newSrc === 'consignment') ? $po['supplier_id'] : null;
 
                     if ($itemUnit === 'box' && $newUpb > 1) {
                         $costPerUnit = round($cost / $newUpb, 4);
                         $totalUnits  = $qty * $newUpb;
-                        $pdo->prepare("INSERT INTO products (name, product_type, unit, units_per_box, cost_price, sell_price, stock, product_source, consignment_supplier_id, consignment_cost) VALUES (?,?,?,?,?,?,?,?,?,?)")
-                            ->execute([$pname, 'regular', 'box', $newUpb, $costPerUnit, $newSell, $totalUnits, $dbSrc, $conSuppId, $newSrc === 'consignment' ? $costPerUnit : 0]);
+                        $pdo->prepare("INSERT INTO products (name, product_type, unit, units_per_box, cost_price, sell_price, sell_price_box, stock, product_source, consignment_supplier_id, consignment_cost) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
+                            ->execute([$pname, 'regular', 'box', $newUpb, $costPerUnit, $newSell, $newSellBox ?: null, $totalUnits, $dbSrc, $conSuppId, $newSrc === 'consignment' ? $costPerUnit : 0]);
                         $newPid = (int)$pdo->lastInsertId();
                         if ($newSrc !== 'consignment') {
                             $pdo->prepare("INSERT INTO batches (product_id,purchase_id,cost_price,quantity_original,quantity_remaining,purchase_date) VALUES (?,?,?,?,?,CURDATE())")
@@ -789,6 +793,12 @@ function openReceive(poId, poNumber, supplierId) {
                                     style="font-size:.6rem;min-width:24px" onclick="rcvToggleCur(${i},'sell','lbp')">L£</button>
                         </div>
                         <div id="rsell-hint-${i}" class="text-muted" style="font-size:.6rem"></div>
+                        ${isAnyBox ? `<div class="input-group input-group-sm mt-1">
+                            <span class="input-group-text px-1" style="font-size:10px">📦/box</span>
+                            <input type="number" name="pitems[${i}][sell_box]" class="form-control form-control-sm"
+                                   value="${it.sell_price_box ? parseFloat(it.sell_price_box).toFixed(4) : ''}"
+                                   min="0" step="0.0001" placeholder="box price (opt)">
+                        </div>` : ''}
                     </td>
                     <td class="recv-line fw-semibold text-success">$0.00</td>
                 `;

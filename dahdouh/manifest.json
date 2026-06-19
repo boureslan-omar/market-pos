@@ -1,7 +1,7 @@
 {
-    "version": "3.1.0",
-    "release_date": "2026-06-17",
-    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.1.0/dahdouh-v3.1.0.zip",
-    "upgrades": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-    "changelog": "v3.1.0 — RSA machine-locked licenses, LBP cash drawer (purchases, suppliers, amenities, customers), void cash register fix, discount % toggle, license info in settings, returns module, purchase type per-row"
+    "version": "3.2.1",
+    "release_date": "2026-06-19",
+    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.2.1/dahdouh-v3.2.1.zip",
+    "upgrades": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+    "changelog": "v3.2.1 — UI scale slider in Settings (80-130%, persists per browser), scrollable navbar with pinned logout button, CSS cache-buster. v3.2.0 — Suppliers LBP payment fixed, thermal 80mm receipt print (POS/Customers/Reports), debt settled line on receipt, LBP input for debt settlement at POS, Hold Sale & Resume, Edit Receipts, Edit Purchases, Owner Cash Tracker, Box price display, Unified cash drawer USD/LBP."
 }

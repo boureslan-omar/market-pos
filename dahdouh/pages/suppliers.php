@@ -208,10 +208,16 @@ alertBox($message);
                     <label class="form-label small">Payment Method</label>
                     <select name="pay_method" id="supPayMethod<?= $viewId ?>" class="form-select form-select-sm"
                             onchange="onSupPayChange(<?= $viewId ?>, <?= json_encode($supBalUSD) ?>, <?= json_encode($supBalLBP) ?>, <?= EXCHANGE_RATE ?>)">
-                        <option value="cash_usd">Cash Register — USD drawer</option>
-                        <option value="cash_lbp">Cash Register — LBP drawer</option>
+                        <option value="cash_usd">Cash Register (USD)</option>
+                        <option value="cash_lbp">Cash Register (LBP)</option>
                         <option value="bank">Bank Transfer / Cheque / Other</option>
                     </select>
+                    <div id="supCurToggle<?= $viewId ?>" class="btn-group btn-group-sm mt-1">
+                        <button type="button" class="btn btn-success active" id="supCurUsd<?= $viewId ?>"
+                                onclick="setSupCur(<?= $viewId ?>, 'usd', <?= json_encode($supBalUSD) ?>, <?= json_encode($supBalLBP) ?>, <?= EXCHANGE_RATE ?>)">$ USD</button>
+                        <button type="button" class="btn btn-outline-warning" id="supCurLbp<?= $viewId ?>"
+                                onclick="setSupCur(<?= $viewId ?>, 'lbp', <?= json_encode($supBalUSD) ?>, <?= json_encode($supBalLBP) ?>, <?= EXCHANGE_RATE ?>)">LL LBP</button>
+                    </div>
                 </div>
                 <div class="col-md-3" id="supUsdBox<?= $viewId ?>">
                     <label class="form-label small">Amount (USD)</label>
@@ -392,21 +398,33 @@ alertBox($message);
 
 <script>
 function onSupPayChange(sid, balUSD, balLBP, rate) {
-    const method = document.getElementById('supPayMethod' + sid)?.value;
-    const usdBox = document.getElementById('supUsdBox' + sid);
-    const lbpBox = document.getElementById('supLbpBox' + sid);
-    const noteEl = document.getElementById('supNote' + sid);
+    const method  = document.getElementById('supPayMethod' + sid)?.value;
+    const isCash  = method === 'cash_usd' || method === 'cash_lbp';
+    const toggle  = document.getElementById('supCurToggle' + sid);
+    const usdBox  = document.getElementById('supUsdBox' + sid);
+    const lbpBox  = document.getElementById('supLbpBox' + sid);
+    if (toggle) toggle.style.display = isCash ? '' : 'none';
     usdBox.style.display = (method === 'cash_lbp') ? 'none' : '';
     lbpBox.style.display = (method === 'cash_lbp') ? '' : 'none';
-
     if (method === 'cash_lbp') {
+        const usdEl = document.getElementById('supAmtUSD' + sid);
+        if (usdEl) usdEl.value = '';
         const lbpEl = document.getElementById('supAmtLBP' + sid);
-        if (lbpEl && balLBP) lbpEl.value = balLBP;
-        if (noteEl && !noteEl.dataset.manual) noteEl.value = noteEl.value; // keep existing
-    } else {
+        if (lbpEl) { lbpEl.value = ''; lbpEl.placeholder = balLBP ? 'Balance ≈ LL ' + Number(balLBP).toLocaleString() : '0'; lbpEl.focus(); }
+    } else if (isCash) {
         const usdEl = document.getElementById('supAmtUSD' + sid);
         if (usdEl && balUSD) usdEl.value = balUSD;
+        const lbpEl = document.getElementById('supAmtLBP' + sid);
+        if (lbpEl) lbpEl.value = '';
     }
+}
+
+function setSupCur(sid, cur, balUSD, balLBP, rate) {
+    const sel = document.getElementById('supPayMethod' + sid);
+    if (sel) sel.value = (cur === 'lbp') ? 'cash_lbp' : 'cash_usd';
+    document.getElementById('supCurUsd' + sid).className = 'btn btn-' + (cur === 'usd' ? 'success active' : 'outline-success');
+    document.getElementById('supCurLbp' + sid).className = 'btn btn-' + (cur === 'lbp' ? 'warning active' : 'outline-warning');
+    onSupPayChange(sid, balUSD, balLBP, rate);
 }
 
 function clearSupForm() {
