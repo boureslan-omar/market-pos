@@ -27,6 +27,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach ($fields as $f) {
         if (isset($_POST[$f])) saveSetting($pdo, $f, trim($_POST[$f]));
     }
+    // Boolean toggles — unchecked checkboxes send nothing, so always save explicitly
+    foreach (['customer_display_enabled','cash_drawer_enabled'] as $b) {
+        saveSetting($pdo, $b, isset($_POST[$b]) ? '1' : '0');
+    }
     if (!$message) $message = 'success:Settings saved.';
 }
 
@@ -103,6 +107,24 @@ alertBox($message);
         <label class="form-check-label" for="autoPrint">
             <strong>Auto-print receipts</strong>
             <div class="text-muted small">When ON, the print dialog opens automatically after each sale.</div>
+        </label>
+    </div>
+</div>
+
+<div class="card stat-card p-4 mb-4">
+    <h6 class="fw-bold mb-3 text-muted">HARDWARE</h6>
+    <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" name="customer_display_enabled" id="custDisplay" value="1" <?= setting('customer_display_enabled')=='1'?'checked':'' ?>>
+        <label class="form-check-label" for="custDisplay">
+            <strong>Customer Display</strong>
+            <div class="text-muted small">When ON, the POS page automatically opens a second window showing the running total for the customer. Open that window on your second monitor or TV display.</div>
+        </label>
+    </div>
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" name="cash_drawer_enabled" id="cashDrawer" value="1" <?= setting('cash_drawer_enabled')=='1'?'checked':'' ?>>
+        <label class="form-check-label" for="cashDrawer">
+            <strong>Cash Drawer</strong>
+            <div class="text-muted small">When ON, the cash drawer opens automatically after each sale and an "Open Drawer" button appears in the POS page. Requires a cash drawer connected to your thermal receipt printer via RJ11 cable.</div>
         </label>
     </div>
 </div>

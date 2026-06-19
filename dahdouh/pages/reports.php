@@ -800,6 +800,166 @@ function printReceiptWindow() {
 </div>
 </div>
 
+<!-- ═══════════ SALES & PURCHASE ANALYSIS ═══════════ -->
+<div class="card stat-card p-4 mt-4 no-print">
+<h5 class="fw-bold mb-3"><i class="bi bi-search me-2"></i>Sales &amp; Purchase Analysis</h5>
+<p class="text-muted small mb-3">Filter within the date range above by product, category, or supplier to see totals.</p>
+
+<div class="row g-2 mb-3">
+    <div class="col-md-4">
+        <label class="form-label small fw-semibold">Category</label>
+        <select id="an-cat" class="form-select form-select-sm" onchange="runAnalysis()">
+            <option value="">— All Categories —</option>
+            <?php foreach ($pdo->query("SELECT id,name FROM categories ORDER BY name") as $c): ?>
+            <option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['name']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label small fw-semibold">Supplier</label>
+        <select id="an-sup" class="form-select form-select-sm" onchange="runAnalysis()">
+            <option value="">— All Suppliers —</option>
+            <?php foreach ($pdo->query("SELECT id,name FROM suppliers ORDER BY name") as $s): ?>
+            <option value="<?= $s['id'] ?>"><?= htmlspecialchars($s['name']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label small fw-semibold">Product</label>
+        <div class="position-relative">
+            <input type="text" id="an-prod-search" class="form-control form-control-sm" placeholder="Search product…" autocomplete="off" oninput="anSearchProduct()">
+            <input type="hidden" id="an-prod-id" value="">
+            <div id="an-prod-drop" class="list-group shadow position-absolute w-100" style="z-index:300;display:none;max-height:200px;overflow-y:auto"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Results -->
+<div id="an-results" style="display:none">
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-3">
+            <div class="card p-3 text-center border-0 bg-light">
+                <div class="small text-muted">Units Sold</div>
+                <div class="fw-bold fs-5" id="an-units-sold">0</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card p-3 text-center border-0 bg-light">
+                <div class="small text-muted">Sales Revenue</div>
+                <div class="fw-bold fs-5 text-primary" id="an-revenue">$0.00</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card p-3 text-center border-0 bg-light">
+                <div class="small text-muted">Units Purchased</div>
+                <div class="fw-bold fs-5" id="an-units-purch">0</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card p-3 text-center border-0 bg-light">
+                <div class="small text-muted">Purchase Cost</div>
+                <div class="fw-bold fs-5 text-danger" id="an-purch-cost">$0.00</div>
+            </div>
+        </div>
+    </div>
+    <div id="an-top-wrap" style="display:none">
+        <div class="small fw-semibold text-muted mb-1">Top Products by Revenue</div>
+        <table class="table table-sm table-hover">
+            <thead><tr><th>Product</th><th class="text-end">Units</th><th class="text-end">Revenue</th></tr></thead>
+            <tbody id="an-top-body"></tbody>
+        </table>
+    </div>
+</div>
+<div id="an-loading" style="display:none" class="text-muted small"><span class="spinner-border spinner-border-sm me-1"></span>Loading…</div>
+<div id="an-empty" style="display:none" class="text-muted small">No data for this selection.</div>
+</div>
+
+<script>
+(function() {
+    const FROM = <?= json_encode($from) ?>;
+    const TO   = <?= json_encode($to) ?>;
+    let anTimer = null;
+
+    window.runAnalysis = function() {
+        const cat  = document.getElementById('an-cat').value;
+        const sup  = document.getElementById('an-sup').value;
+        const prod = document.getElementById('an-prod-id').value;
+        document.getElementById('an-results').style.display = 'none';
+        document.getElementById('an-empty').style.display   = 'none';
+
+        clearTimeout(anTimer);
+        anTimer = setTimeout(() => {
+            document.getElementById('an-loading').style.display = '';
+            let url = `/dahdouh/pages/api.php?action=report_analysis&from=${FROM}&to=${TO}`;
+            if (cat)  url += `&category_id=${cat}`;
+            if (sup)  url += `&supplier_id=${sup}`;
+            if (prod) url += `&product_id=${prod}`;
+
+            fetch(url).then(r => r.json()).then(d => {
+                document.getElementById('an-loading').style.display = 'none';
+                if (d.error) return;
+                const hasData = d.revenue > 0 || d.purchase_cost > 0;
+                if (!hasData) { document.getElementById('an-empty').style.display = ''; return; }
+
+                document.getElementById('an-units-sold').textContent  = parseFloat(d.units_sold).toFixed(0);
+                document.getElementById('an-revenue').textContent     = '$' + parseFloat(d.revenue).toFixed(2);
+                document.getElementById('an-units-purch').textContent = parseFloat(d.units_purchased).toFixed(0);
+                document.getElementById('an-purch-cost').textContent  = '$' + parseFloat(d.purchase_cost).toFixed(2);
+
+                const topWrap = document.getElementById('an-top-wrap');
+                const topBody = document.getElementById('an-top-body');
+                if (d.top_products && d.top_products.length > 1) {
+                    topBody.innerHTML = d.top_products.map(p =>
+                        `<tr><td>${escH(p.name)}</td><td class="text-end">${parseFloat(p.units).toFixed(0)}</td><td class="text-end">$${parseFloat(p.revenue).toFixed(2)}</td></tr>`
+                    ).join('');
+                    topWrap.style.display = '';
+                } else {
+                    topWrap.style.display = 'none';
+                }
+                document.getElementById('an-results').style.display = '';
+            }).catch(() => { document.getElementById('an-loading').style.display = 'none'; });
+        }, 300);
+    };
+
+    function escH(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    let anSearchTimer = null;
+    window.anSearchProduct = function() {
+        const q = document.getElementById('an-prod-search').value.trim();
+        document.getElementById('an-prod-id').value = '';
+        const drop = document.getElementById('an-prod-drop');
+        clearTimeout(anSearchTimer);
+        if (q.length < 1) { drop.style.display = 'none'; return; }
+        anSearchTimer = setTimeout(() => {
+            fetch(`/dahdouh/pages/api.php?action=search_products_purchase&q=${encodeURIComponent(q)}`)
+                .then(r => r.json()).then(res => {
+                    if (!res.length) { drop.style.display = 'none'; return; }
+                    drop.innerHTML = res.slice(0,10).map(p =>
+                        `<a class="list-group-item list-group-item-action p-2 small" href="#"
+                             onclick="event.preventDefault();anPickProduct(${p.id},${JSON.stringify(p.name).replace(/</g,'\\u003c')})">
+                            ${escH(p.name)}
+                        </a>`
+                    ).join('');
+                    drop.style.display = '';
+                });
+        }, 250);
+    };
+
+    window.anPickProduct = function(id, name) {
+        document.getElementById('an-prod-id').value     = id;
+        document.getElementById('an-prod-search').value = name;
+        document.getElementById('an-prod-drop').style.display = 'none';
+        runAnalysis();
+    };
+
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('#an-prod-search') && !e.target.closest('#an-prod-drop')) {
+            document.getElementById('an-prod-drop').style.display = 'none';
+        }
+    });
+})();
+</script>
+
 <form id="voidForm" method="POST" style="display:none">
     <input type="hidden" name="action" value="void_sale">
     <input type="hidden" name="sale_id" id="voidSaleId">

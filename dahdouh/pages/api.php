@@ -712,4 +712,72 @@ if ($action === 'sale_receipt') {
     exit;
 }
 
+// ─── Report analysis — filter by product / category / supplier ───────────────
+if ($action === 'report_analysis') {
+    $from       = $_GET['from']        ?? date('Y-m-01');
+    $to         = $_GET['to']          ?? date('Y-m-d');
+    $productId  = (int)($_GET['product_id']  ?? 0);
+    $categoryId = (int)($_GET['category_id'] ?? 0);
+    $supplierId = (int)($_GET['supplier_id'] ?? 0);
+
+    // ── Sales side ────────────────────────────────────────────────────────────
+    $sWhere = ['DATE(s.sale_date) BETWEEN ? AND ?', 's.is_void = 0'];
+    $sParams = [$from, $to];
+    if ($productId)  { $sWhere[] = 'si.product_id = ?';       $sParams[] = $productId; }
+    if ($categoryId) { $sWhere[] = 'p.category_id = ?';       $sParams[] = $categoryId; }
+    if ($supplierId) { $sWhere[] = 'p.supplier_id = ?';       $sParams[] = $supplierId; }
+    $sJoin = 'JOIN products p ON p.id = si.product_id';
+    $salesSQL = "
+        SELECT SUM(si.quantity) AS units_sold,
+               SUM(si.total) AS revenue,
+               SUM(si.quantity * si.unit_cost) AS cogs
+        FROM sale_items si
+        JOIN sales s ON s.id = si.sale_id
+        $sJoin
+        WHERE " . implode(' AND ', $sWhere);
+    $salesStmt = $pdo->prepare($salesSQL);
+    $salesStmt->execute($sParams);
+    $salesRow = $salesStmt->fetch();
+
+    // ── Top sold products in filter ───────────────────────────────────────────
+    $topSQL = "
+        SELECT p.name, SUM(si.quantity) AS units, SUM(si.total) AS revenue
+        FROM sale_items si
+        JOIN sales s ON s.id = si.sale_id
+        $sJoin
+        WHERE " . implode(' AND ', $sWhere) . "
+        GROUP BY si.product_id ORDER BY revenue DESC LIMIT 10";
+    $topStmt = $pdo->prepare($topSQL);
+    $topStmt->execute($sParams);
+    $topProducts = $topStmt->fetchAll();
+
+    // ── Purchases side ────────────────────────────────────────────────────────
+    $pWhere = ['pu.purchase_date BETWEEN ? AND ?'];
+    $pParams = [$from, $to];
+    if ($productId)  { $pWhere[] = 'pi.product_id = ?';    $pParams[] = $productId; }
+    if ($categoryId) { $pWhere[] = 'p.category_id = ?';    $pParams[] = $categoryId; }
+    if ($supplierId) { $pWhere[] = 'pu.supplier_id = ?';   $pParams[] = $supplierId; }
+    $pJoinProd = ($productId || $categoryId) ? 'JOIN products p ON p.id = pi.product_id' : 'LEFT JOIN products p ON p.id = pi.product_id';
+    $purchSQL = "
+        SELECT SUM(pi.quantity) AS units_purchased,
+               SUM(pi.total) AS purchase_cost
+        FROM purchase_items pi
+        JOIN purchases pu ON pu.id = pi.purchase_id
+        $pJoinProd
+        WHERE " . implode(' AND ', $pWhere);
+    $purchStmt = $pdo->prepare($purchSQL);
+    $purchStmt->execute($pParams);
+    $purchRow = $purchStmt->fetch();
+
+    echo json_encode([
+        'units_sold'       => (float)($salesRow['units_sold'] ?? 0),
+        'revenue'          => (float)($salesRow['revenue']    ?? 0),
+        'cogs'             => (float)($salesRow['cogs']       ?? 0),
+        'units_purchased'  => (float)($purchRow['units_purchased'] ?? 0),
+        'purchase_cost'    => (float)($purchRow['purchase_cost']   ?? 0),
+        'top_products'     => $topProducts,
+    ]);
+    exit;
+}
+
 echo json_encode(['error' => 'Unknown action']);

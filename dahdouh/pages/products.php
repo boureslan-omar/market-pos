@@ -60,6 +60,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+// ── Low stock PDF export ──────────────────────────────────────────────────────
+if (($_GET['export'] ?? '') === 'lowstock_pdf') {
+    $lowStock = $pdo->query("
+        SELECT p.name, s.name AS sup_name, p.stock, p.low_stock_alert, p.unit
+        FROM products p
+        LEFT JOIN suppliers s ON s.id = p.supplier_id
+        WHERE p.product_type != 'bulk' AND p.stock <= p.low_stock_alert
+        ORDER BY p.stock ASC, p.name
+    ")->fetchAll();
+    header('Content-Type: text/html; charset=UTF-8');
+    echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Low Stock Report</title>
+<style>
+@page { size: A4 portrait; margin: 15mm; }
+body { font-family: Arial, sans-serif; font-size: 12px; }
+h2 { margin: 0 0 4px; font-size: 16px; }
+p.sub { margin: 0 0 12px; color: #666; font-size: 11px; }
+table { width: 100%; border-collapse: collapse; }
+th { background: #222; color: #fff; padding: 6px 8px; text-align: left; font-size: 11px; }
+td { padding: 5px 8px; border-bottom: 1px solid #ddd; font-size: 11px; }
+tr:nth-child(even) td { background: #f9f9f9; }
+.out { color: #c00; font-weight: bold; }
+.low { color: #b06000; }
+</style></head><body>
+<h2>Low Stock Report — ' . htmlspecialchars(STORE_NAME) . '</h2>
+<p class="sub">Generated: ' . date('Y-m-d H:i') . ' &nbsp;|&nbsp; ' . count($lowStock) . ' item(s)</p>
+<table>
+<thead><tr><th>#</th><th>Product</th><th>Supplier</th><th>Unit</th><th>In Stock</th><th>Min Level</th></tr></thead>
+<tbody>';
+    foreach ($lowStock as $idx => $r) {
+        $cls = $r['stock'] == 0 ? 'out' : 'low';
+        echo '<tr><td>' . ($idx+1) . '</td>'
+            . '<td>' . htmlspecialchars($r['name']) . '</td>'
+            . '<td>' . htmlspecialchars($r['sup_name'] ?? '—') . '</td>'
+            . '<td>' . htmlspecialchars($r['unit'] ?? 'pcs') . '</td>'
+            . '<td class="' . $cls . '">' . (float)$r['stock'] . '</td>'
+            . '<td>' . (float)$r['low_stock_alert'] . '</td></tr>';
+    }
+    echo '</tbody></table>
+<script>window.onload=function(){window.print();};<\/script>
+</body></html>';
+    exit;
+}
+
 $search    = trim($_GET['q'] ?? '');
 $catFilter = (int)($_GET['cat'] ?? 0);
 $typeFilter = $_GET['type'] ?? '';
@@ -85,6 +128,9 @@ alertBox($message);
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="fw-bold"><i class="bi bi-box-seam me-2"></i>Products</h4>
     <div class="d-flex gap-2">
+        <a href="products.php?export=lowstock_pdf" target="_blank" class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-file-earmark-pdf"></i> Low Stock PDF
+        </a>
         <a href="import_products.php?export=1" class="btn btn-outline-success btn-sm">
             <i class="bi bi-download"></i> Export CSV
         </a>

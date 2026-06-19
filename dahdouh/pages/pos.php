@@ -149,8 +149,10 @@ $products   = $pdo->query("
     ORDER BY p.product_type, p.name
 ")->fetchAll();
 
-$rate       = EXCHANGE_RATE;
-$autoPrint  = AUTO_PRINT;
+$rate            = EXCHANGE_RATE;
+$autoPrint       = AUTO_PRINT;
+$custDisplay     = CUSTOMER_DISPLAY;
+$cashDrawer      = CASH_DRAWER;
 
 renderHead('POS — Sale');
 renderNav('pos');
@@ -277,7 +279,10 @@ function printPosReceipt() {
         '</body></html>');
     win.document.close();
 }
-<?php if ($autoPrint): ?>window.addEventListener('load', () => setTimeout(printPosReceipt, 500));<?php endif; ?>
+<?php if ($autoPrint):    ?>window.addEventListener('load', () => setTimeout(printPosReceipt, 500));<?php endif; ?>
+<?php if ($cashDrawer):  ?>window.addEventListener('load', () => setTimeout(openCashDrawer, 800));<?php endif; ?>
+<?php if ($custDisplay): ?>window.addEventListener('load', () => { localStorage.setItem('posDisplay', JSON.stringify({items:[], total:0})); });<?php endif; ?>
+<?php if (!$lastSale && $custDisplay): ?>window.addEventListener('load', openDisplayWindow);<?php endif; ?>
 </script>
 
 <?php else: ?>
@@ -427,6 +432,11 @@ function printPosReceipt() {
     <button type="button" class="btn btn-outline-warning w-100 mt-1 btn-sm" onclick="holdSale()">
         <i class="bi bi-pause-circle me-1"></i>Hold Sale
     </button>
+    <?php if ($cashDrawer): ?>
+    <button type="button" class="btn btn-outline-secondary w-100 mt-1 btn-sm" onclick="openCashDrawer()">
+        <i class="bi bi-safe me-1"></i>Open Drawer
+    </button>
+    <?php endif; ?>
     <button type="button" id="held-btn" class="btn btn-warning w-100 mt-1 btn-sm" onclick="openHeldSales()" style="display:none">
         <i class="bi bi-clock-history me-1"></i>Held Sales <span id="held-badge" class="badge bg-danger ms-1">0</span>
     </button>
@@ -619,8 +629,43 @@ function printPosReceipt() {
 <?php endif; // not lastSale ?>
 
 <script>
-const EXCHANGE_RATE = <?= $rate ?>;
-const AUTO_PRINT_SETTING = <?= $autoPrint ? 'true' : 'false' ?>;
+const EXCHANGE_RATE       = <?= $rate ?>;
+const AUTO_PRINT_SETTING  = <?= $autoPrint    ? 'true' : 'false' ?>;
+const CUSTOMER_DISPLAY_ON = <?= $custDisplay  ? 'true' : 'false' ?>;
+const CASH_DRAWER_ON      = <?= $cashDrawer   ? 'true' : 'false' ?>;
+
+// ─── Cash Drawer ──────────────────────────────────────────────────────────────
+function openCashDrawer() {
+    // Sends the ESC/POS "kick cash drawer" command to the thermal printer
+    // by opening a tiny print window. The printer opens the drawer on receipt.
+    const win = window.open('', '_blank', 'width=1,height=1,left=-100,top=-100');
+    if (!win) return;
+    // ESC p 0 25 250 — standard kick-drawer pulse for most thermal printers
+    win.document.write(
+        '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>' +
+        '<body><pre style="font-family:monospace">\x1B\x70\x00\x19\xFA</pre>' +
+        '<script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);};<\/script>' +
+        '</body></html>'
+    );
+    win.document.close();
+}
+
+// ─── Customer Display ─────────────────────────────────────────────────────────
+let _displayWin = null;
+
+function openDisplayWindow() {
+    if (!CUSTOMER_DISPLAY_ON) return;
+    if (_displayWin && !_displayWin.closed) return;
+    _displayWin = window.open('/dahdouh/pages/customer_display.php', 'customerDisplay',
+        'width=1024,height=600,menubar=no,toolbar=no,location=no,status=no');
+}
+
+function syncDisplay() {
+    if (!CUSTOMER_DISPLAY_ON) return;
+    const items = Object.values(cart).map(it => ({name: it.name, qty: it.qty, price: it.price}));
+    const total = parseFloat(document.getElementById('total-usd')?.textContent?.replace('$','').replace(/,/g,'') || 0);
+    localStorage.setItem('posDisplay', JSON.stringify({items, total}));
+}
 
 // ─── Category filter ─────────────────────────────────────────────────────────
 document.querySelectorAll('.cat-btn').forEach(btn => {
@@ -877,6 +922,7 @@ function updateTotals(subtotal) {
     document.getElementById('subtotal-val').textContent = formatUSD(subtotal);
     document.getElementById('total-usd').textContent    = formatUSD(total);
     document.getElementById('total-lbp').textContent    = formatLBP(total * EXCHANGE_RATE);
+    syncDisplay();
 }
 
 // ─── Checkout Modal ───────────────────────────────────────────────────────────

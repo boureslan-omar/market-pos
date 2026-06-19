@@ -39,10 +39,12 @@ function saveSetting($pdo, $key, $value) {
     $GLOBALS['_settings'][$key] = $value;
 }
 
-define('STORE_NAME',    setting('store_name',    'Zoughaib Market'));
-define('EXCHANGE_RATE', (float) setting('exchange_rate', 89750));
-define('AUTO_PRINT',    setting('auto_print_receipt', '0') === '1');
-define('BASE_CURRENCY', setting('base_currency', 'USD'));
+define('STORE_NAME',         setting('store_name',             'Zoughaib Market'));
+define('EXCHANGE_RATE',      (float) setting('exchange_rate',  89750));
+define('AUTO_PRINT',         setting('auto_print_receipt',     '0') === '1');
+define('BASE_CURRENCY',      setting('base_currency',          'USD'));
+define('CUSTOMER_DISPLAY',   setting('customer_display_enabled','0') === '1');
+define('CASH_DRAWER',        setting('cash_drawer_enabled',     '0') === '1');
 
 // ── Auth helpers ─────────────────────────────────────────────────────────────
 

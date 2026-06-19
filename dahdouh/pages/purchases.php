@@ -76,20 +76,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $supplierId = (int)$defId;
     }
-    $pids       = $_POST['product_id']     ?? [];
-    $qtys       = $_POST['quantity']       ?? [];
-    $costs      = $_POST['unit_cost']      ?? [];
-    $sellPrices = $_POST['new_sell_price'] ?? [];
-    $itemTypes  = $_POST['item_type']      ?? [];  // 'regular' | 'consignment' | 'bulk' per row
+    $pids          = $_POST['product_id']          ?? [];
+    $qtys          = $_POST['quantity']            ?? [];
+    $costs         = $_POST['unit_cost']           ?? [];
+    $sellPrices    = $_POST['new_sell_price']      ?? [];
+    $sellBoxPrices = $_POST['new_sell_price_box']  ?? [];
+    $itemTypes     = $_POST['item_type']           ?? [];  // 'regular' | 'consignment' | 'bulk' per row
 
     $items = [];
     for ($i = 0; $i < count($pids); $i++) {
-        $pid   = (int)$pids[$i];
-        $qty   = (float)($qtys[$i] ?? 0);
-        $cost  = (float)($costs[$i] ?? 0);
-        $sell  = (float)($sellPrices[$i] ?? 0);
-        $itype = in_array($itemTypes[$i] ?? '', ['regular','consignment','bulk']) ? $itemTypes[$i] : 'regular';
-        if ($pid > 0 && $cost > 0) $items[] = [$pid, $qty, $cost, $sell, $itype];
+        $pid      = (int)$pids[$i];
+        $qty      = (float)($qtys[$i] ?? 0);
+        $cost     = (float)($costs[$i] ?? 0);
+        $sell     = (float)($sellPrices[$i] ?? 0);
+        $sellBox  = (float)($sellBoxPrices[$i] ?? 0);
+        $itype    = in_array($itemTypes[$i] ?? '', ['regular','consignment','bulk']) ? $itemTypes[$i] : 'regular';
+        if ($pid > 0 && $cost > 0) $items[] = [$pid, $qty, $cost, $sell, $itype, $sellBox];
     }
 
     if (empty($items)) {
@@ -104,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ->execute([$supplierId, $reference, $paymentMethod, $note, $date]);
             $purchId = $pdo->lastInsertId();
 
-            foreach ($items as [$pid, $qty, $cost, $newSell, $itype]) {
+            foreach ($items as [$pid, $qty, $cost, $newSell, $itype, $newSellBox]) {
                 $prod = $pdo->prepare("SELECT product_type, name, sell_price, cost_price FROM products WHERE id=?");
                 $prod->execute([$pid]);
                 $prod = $prod->fetch();
@@ -114,10 +116,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $totalDue   += $lineTotal;
                     $pdo->prepare("INSERT INTO purchase_items (purchase_id,product_id,product_name,product_type,quantity,unit_cost,total) VALUES (?,?,?,?,?,?,?)")
                         ->execute([$purchId, $pid, $prod['name'], 'bulk', 0, $cost, $lineTotal]);
-                    if ($newSell > 0) {
-                        $pdo->prepare("UPDATE products SET sell_price=? WHERE id=?")->execute([$newSell, $pid]);
+                    if ($newSell > 0 || $newSellBox > 0) {
+                        $upd = []; $updP = [];
+                        if ($newSell    > 0) { $upd[] = 'sell_price=?';     $updP[] = $newSell; }
+                        if ($newSellBox > 0) { $upd[] = 'sell_price_box=?'; $updP[] = $newSellBox; }
+                        $updP[] = $pid;
+                        $pdo->prepare("UPDATE products SET " . implode(',', $upd) . " WHERE id=?")->execute($updP);
                     }
-                    $batchReport[] = "✓ {$prod['name']} — bulk purchase " . fmtUSD($cost) . ($newSell > 0 ? " | Sell → " . fmtUSD($newSell) : "");
+                    $batchReport[] = "✓ {$prod['name']} — bulk purchase " . fmtUSD($cost) . ($newSell > 0 ? " | Sell → " . fmtUSD($newSell) : "") . ($newSellBox > 0 ? " | Box sell → " . fmtUSD($newSellBox) : "");
 
                 } elseif ($itype === 'consignment') {
                     $lineTotal         = $qty * $cost;
@@ -140,8 +146,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ->execute([$purchId, $pid, $prod['name'], 'consignment', $qty, $cost, $lineTotal, $batchId, $batchAction]);
                     $updateSell = $newSell > 0 ? $newSell : $prod['sell_price'];
                     // Mark product as consignment — POS will use consignment_cost when selling
-                    $pdo->prepare("UPDATE products SET stock=stock+?, consignment_cost=?, consignment_supplier_id=?, product_source='consignment', sell_price=? WHERE id=?")
-                        ->execute([$qty, $cost, $supplierId, $updateSell, $pid]);
+                    if ($newSellBox > 0) {
+                        $pdo->prepare("UPDATE products SET stock=stock+?, consignment_cost=?, consignment_supplier_id=?, product_source='consignment', sell_price=?, sell_price_box=? WHERE id=?")
+                            ->execute([$qty, $cost, $supplierId, $updateSell, $newSellBox, $pid]);
+                    } else {
+                        $pdo->prepare("UPDATE products SET stock=stock+?, consignment_cost=?, consignment_supplier_id=?, product_source='consignment', sell_price=? WHERE id=?")
+                            ->execute([$qty, $cost, $supplierId, $updateSell, $pid]);
+                    }
 
                 } else {
                     // regular
@@ -165,8 +176,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $pdo->prepare("INSERT INTO purchase_items (purchase_id,product_id,product_name,product_type,quantity,unit_cost,total,batch_id,batch_action) VALUES (?,?,?,?,?,?,?,?,?)")
                         ->execute([$purchId, $pid, $prod['name'], 'regular', $qty, $cost, $lineTotal, $batchId, $batchAction]);
                     $updateSell = $newSell > 0 ? $newSell : $prod['sell_price'];
-                    $pdo->prepare("UPDATE products SET stock=stock+?, cost_price=?, sell_price=?, product_source='owned' WHERE id=?")
-                        ->execute([$qty, $cost, $updateSell, $pid]);
+                    if ($newSellBox > 0) {
+                        $pdo->prepare("UPDATE products SET stock=stock+?, cost_price=?, sell_price=?, sell_price_box=?, product_source='owned' WHERE id=?")
+                            ->execute([$qty, $cost, $updateSell, $newSellBox, $pid]);
+                    } else {
+                        $pdo->prepare("UPDATE products SET stock=stock+?, cost_price=?, sell_price=?, product_source='owned' WHERE id=?")
+                            ->execute([$qty, $cost, $updateSell, $pid]);
+                    }
                 }
             }
 
@@ -682,6 +698,14 @@ function addPurchRow() {
                         style="font-size:.65rem;min-width:32px" onclick="toggleCur('psell',${i},'lbp')">LBP</button>
             </div>
             <div id="psell-hint-${i}" class="text-muted" style="font-size:.62rem">0 = keep current</div>
+            <div id="psell-box-wrap-${i}" style="display:none" class="mt-1">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text px-1" style="font-size:.65rem">📦</span>
+                    <input type="number" name="new_sell_price_box[]" id="psell-box-${i}" class="form-control"
+                           value="" min="0" step="0.01" placeholder="Wholesale/box">
+                </div>
+                <div class="text-muted" style="font-size:.62rem">0 = keep current</div>
+            </div>
         </td>
         <td id="pline-${i}" class="fw-bold small">0.00</td>
         <td id="pbatch-${i}" class="small text-muted">—</td>
@@ -773,6 +797,15 @@ function selectProduct(i, p) {
     }
 
     document.getElementById('psearch-'+i).dataset.upb = upb;
+
+    // Show wholesale box price field when product has box pricing
+    const sellBoxWrap = document.getElementById('psell-box-wrap-'+i);
+    if (sellBoxWrap) {
+        sellBoxWrap.style.display = upb > 1 ? '' : 'none';
+        const sellBoxEl = document.getElementById('psell-box-'+i);
+        if (sellBoxEl) sellBoxEl.value = parseFloat(p.sell_price_box) > 0 ? parseFloat(p.sell_price_box).toFixed(2) : '';
+    }
+
     onTypeChange(i);  // drives qty disabled, box visibility, batch check, calcRow
 }
 
