@@ -445,6 +445,13 @@ foreach ($summaryCards as [$label,$val,$sub,$icon,$cls]):
 </div>
 
 <!-- Period Detail -->
+<?php
+$totTxns  = array_sum(array_column($timeline, 'txns'));
+$totRev   = array_sum(array_column($timeline, 'revenue'));
+$totCogs  = array_sum(array_column($timeline, 'cogs'));
+$totGP    = $totRev - $totCogs;
+$totMargin = $totRev > 0 ? round(($totGP / $totRev) * 100, 1) : 0;
+?>
 <div class="card stat-card p-3">
 <h6 class="fw-bold mb-3">Period Detail</h6>
 <div class="table-responsive">
@@ -469,6 +476,19 @@ foreach ($summaryCards as [$label,$val,$sub,$icon,$cls]):
     <?php endforeach; ?>
     <?php if (!$timeline): ?><tr><td colspan="7" class="text-center text-muted">No data for this period.</td></tr><?php endif; ?>
     </tbody>
+    <?php if ($timeline): ?>
+    <tfoot class="table-secondary fw-bold border-top border-2">
+        <tr>
+            <td>TOTAL</td>
+            <td><?= $totTxns ?></td>
+            <td><?= fmtUSD($totRev) ?></td>
+            <td class="text-muted"><?= fmtLBP($totRev * $rate) ?></td>
+            <td><?= fmtUSD($totCogs) ?></td>
+            <td class="text-success"><?= fmtUSD($totGP) ?></td>
+            <td><span class="badge <?= $totMargin>20?'bg-success':($totMargin>10?'bg-warning text-dark':'bg-danger') ?>"><?= $totMargin ?>%</span></td>
+        </tr>
+    </tfoot>
+    <?php endif; ?>
 </table>
 </div>
 </div>
@@ -935,10 +955,10 @@ function printReceiptWindow() {
                 .then(r => r.json()).then(res => {
                     if (!res.length) { drop.style.display = 'none'; return; }
                     drop.innerHTML = res.slice(0,10).map(p =>
-                        `<a class="list-group-item list-group-item-action p-2 small" href="#"
-                             onclick="event.preventDefault();anPickProduct(${p.id},${JSON.stringify(p.name).replace(/</g,'\\u003c')})">
+                        `<button type="button" class="list-group-item list-group-item-action p-2 small text-start"
+                                 data-pid="${p.id}" data-pname="${escH(p.name)}">
                             ${escH(p.name)}
-                        </a>`
+                        </button>`
                     ).join('');
                     drop.style.display = '';
                 });
@@ -951,6 +971,12 @@ function printReceiptWindow() {
         document.getElementById('an-prod-drop').style.display = 'none';
         runAnalysis();
     };
+
+    document.getElementById('an-prod-drop').addEventListener('click', function(e) {
+        const btn = e.target.closest('[data-pid]');
+        if (!btn) return;
+        anPickProduct(parseInt(btn.dataset.pid), btn.dataset.pname);
+    });
 
     document.addEventListener('click', function(e) {
         if (!e.target.closest('#an-prod-search') && !e.target.closest('#an-prod-drop')) {

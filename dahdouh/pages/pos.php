@@ -818,9 +818,9 @@ function changeQty(id, delta) {
     renderCart();
 }
 
-function removeFromCart(id) { delete cart[id]; renderCart(); }
+function removeFromCart(id) { delete cart[id]; delete cartCur[id]; renderCart(); }
 
-function clearCart() { Object.keys(cart).forEach(k => delete cart[k]); renderCart(); }
+function clearCart() { Object.keys(cart).forEach(k => { delete cart[k]; delete cartCur[k]; }); renderCart(); }
 
 function renderCart() {
     const tbody = document.getElementById('cart-body');
@@ -844,6 +844,10 @@ function renderCart() {
             : item.isBox
             ? `<span class="badge bg-primary ms-1" style="font-size:.55rem">📦×${item.upb}</span>`
             : '';
+        const iCur        = cartCur[id] || 'usd';
+        const iCurLabel   = iCur === 'lbp' ? 'LL' : '$';
+        const iCurStep    = iCur === 'lbp' ? '500' : '0.01';
+        const iCurDisplay = iCur === 'lbp' ? Math.round(item.price * EXCHANGE_RATE) : item.price.toFixed(2);
         html += `<tr>
             <td class="small">${item.name}${badge}</td>
             <td style="width:88px">
@@ -854,11 +858,14 @@ function renderCart() {
                     <button class="btn btn-outline-secondary btn-sm px-1 py-0" onclick="changeQty('${id}',${delta})">+</button>
                 </div>
             </td>
-            <td style="width:80px">
+            <td style="width:${iCur==='lbp'?'120':'92'}px">
                 <div class="input-group input-group-sm">
-                    <span class="input-group-text px-1 py-0" style="font-size:11px">$</span>
-                    <input type="number" class="form-control form-control-sm text-end px-1" value="${item.price.toFixed(2)}"
-                           min="0" step="0.01" onchange="setItemPrice('${id}',this.value)" style="width:48px;padding:2px" title="Edit price">
+                    <button type="button" class="btn btn-outline-secondary px-1 py-0" id="cur-btn-${id}"
+                            style="font-size:10px;min-width:24px;line-height:1" onclick="toggleItemCur('${id}')"
+                            title="Click to switch USD ↔ LBP">${iCurLabel}</button>
+                    <input type="number" class="form-control form-control-sm text-end px-1" id="price-inp-${id}"
+                           value="${iCurDisplay}" min="0" step="${iCurStep}"
+                           onchange="setItemPrice('${id}',this.value)" style="width:${iCur==='lbp'?'90':'55'}px;padding:2px" title="Edit price — click currency to switch">
                 </div>
             </td>
             <td class="small text-end fw-bold" id="ln-${id}">${formatUSD(line)}</td>
@@ -881,11 +888,38 @@ function setQty(id, val) {
     renderCart();
 }
 
+// Per-item price currency state (survives renderCart re-renders)
+const cartCur = {};
+
+function toggleItemCur(id) {
+    const cur    = cartCur[id] || 'usd';
+    const newCur = cur === 'usd' ? 'lbp' : 'usd';
+    cartCur[id]  = newCur;
+    const inp = document.getElementById('price-inp-' + id);
+    const btn = document.getElementById('cur-btn-' + id);
+    const td  = inp ? inp.closest('td') : null;
+    if (!inp || !cart[id]) return;
+    if (newCur === 'lbp') {
+        inp.value    = Math.round(cart[id].price * EXCHANGE_RATE);
+        inp.step     = '500';
+        inp.style.width = '90px';
+        if (btn) btn.textContent = 'LL';
+        if (td)  td.style.width  = '120px';
+    } else {
+        inp.value    = cart[id].price.toFixed(2);
+        inp.step     = '0.01';
+        inp.style.width = '55px';
+        if (btn) btn.textContent = '$';
+        if (td)  td.style.width  = '92px';
+    }
+}
+
 function setItemPrice(id, val) {
     val = parseFloat(val);
     if (isNaN(val) || val < 0) return;
-    cart[id].price = val;
-    const line = parseFloat((cart[id].qty * val).toFixed(2));
+    const cur = cartCur[id] || 'usd';
+    cart[id].price = cur === 'lbp' ? val / EXCHANGE_RATE : val;
+    const line = parseFloat((cart[id].qty * cart[id].price).toFixed(2));
     const el = document.getElementById('ln-' + id);
     if (el) el.textContent = formatUSD(line);
     let subtotal = 0;

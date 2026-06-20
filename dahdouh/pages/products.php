@@ -63,7 +63,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ── Low stock PDF export ──────────────────────────────────────────────────────
 if (($_GET['export'] ?? '') === 'lowstock_pdf') {
     $lowStock = $pdo->query("
-        SELECT p.name, s.name AS sup_name, p.stock, p.low_stock_alert, p.unit
+        SELECT p.name, s.name AS sup_name, p.stock, p.low_stock_alert, p.unit,
+               p.cost_price, p.units_per_box
         FROM products p
         LEFT JOIN suppliers s ON s.id = p.supplier_id
         WHERE p.product_type != 'bulk' AND p.stock <= p.low_stock_alert
@@ -86,16 +87,21 @@ tr:nth-child(even) td { background: #f9f9f9; }
 <h2>Low Stock Report — ' . htmlspecialchars(STORE_NAME) . '</h2>
 <p class="sub">Generated: ' . date('Y-m-d H:i') . ' &nbsp;|&nbsp; ' . count($lowStock) . ' item(s)</p>
 <table>
-<thead><tr><th>#</th><th>Product</th><th>Supplier</th><th>Unit</th><th>In Stock</th><th>Min Level</th></tr></thead>
+<thead><tr><th>#</th><th>Product</th><th>Supplier</th><th>Unit</th><th>In Stock</th><th>Min Level</th><th>Last Cost</th></tr></thead>
 <tbody>';
     foreach ($lowStock as $idx => $r) {
-        $cls = $r['stock'] == 0 ? 'out' : 'low';
+        $cls      = $r['stock'] == 0 ? 'out' : 'low';
+        $costDisp = $r['cost_price'] > 0 ? '$' . number_format($r['cost_price'], 2) : '—';
+        if ($r['units_per_box'] > 1 && $r['cost_price'] > 0) {
+            $costDisp .= '/unit ($' . number_format($r['cost_price'] * $r['units_per_box'], 2) . '/box)';
+        }
         echo '<tr><td>' . ($idx+1) . '</td>'
             . '<td>' . htmlspecialchars($r['name']) . '</td>'
             . '<td>' . htmlspecialchars($r['sup_name'] ?? '—') . '</td>'
             . '<td>' . htmlspecialchars($r['unit'] ?? 'pcs') . '</td>'
             . '<td class="' . $cls . '">' . (float)$r['stock'] . '</td>'
-            . '<td>' . (float)$r['low_stock_alert'] . '</td></tr>';
+            . '<td>' . (float)$r['low_stock_alert'] . '</td>'
+            . '<td>' . $costDisp . '</td></tr>';
     }
     echo '</tbody></table>
 <script>window.onload=function(){window.print();};<\/script>
@@ -118,6 +124,14 @@ $stmt->execute($params);
 $products   = $stmt->fetchAll();
 $categories = $pdo->query("SELECT * FROM categories ORDER BY name")->fetchAll();
 $suppliers  = $pdo->query("SELECT * FROM suppliers ORDER BY name")->fetchAll();
+$lowStockModal = $pdo->query("
+    SELECT p.id, p.name, s.name AS sup_name, p.stock, p.low_stock_alert,
+           p.unit, p.cost_price, p.units_per_box
+    FROM products p
+    LEFT JOIN suppliers s ON s.id = p.supplier_id
+    WHERE p.product_type != 'bulk' AND p.stock <= p.low_stock_alert
+    ORDER BY p.stock ASC, p.name
+")->fetchAll();
 
 renderHead('Products');
 renderNav('products');
@@ -128,9 +142,9 @@ alertBox($message);
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="fw-bold"><i class="bi bi-box-seam me-2"></i>Products</h4>
     <div class="d-flex gap-2">
-        <a href="products.php?export=lowstock_pdf" target="_blank" class="btn btn-outline-danger btn-sm">
+        <button type="button" class="btn btn-outline-danger btn-sm" onclick="openLowStockModal()">
             <i class="bi bi-file-earmark-pdf"></i> Low Stock PDF
-        </a>
+        </button>
         <a href="import_products.php?export=1" class="btn btn-outline-success btn-sm">
             <i class="bi bi-download"></i> Export CSV
         </a>
@@ -379,13 +393,18 @@ alertBox($message);
         </div>
         <div class="col-md-4" id="row-sell-box" style="display:none">
             <label class="form-label d-flex justify-content-between align-items-center flex-wrap gap-1">
-                <span>Sell Price per Box (USD)</span>
+                <span>Sell Price per Box</span>
                 <span class="form-check form-check-inline mb-0">
                     <input class="form-check-input" type="checkbox" id="use-margin-box" onchange="toggleBoxMarginMode()">
                     <label class="form-check-label small text-muted fw-normal" for="use-margin-box">Set by margin %</label>
                 </span>
             </label>
-            <input type="number" name="sell_price_box" id="f_sell_box" class="form-control" step="0.0001" min="0" oninput="calcFromBox()">
+            <div class="input-group">
+                <input type="number" name="sell_price_box" id="f_sell_box" class="form-control" step="0.0001" min="0" data-cur="usd" oninput="calcFromBox(); prodUpdateHint('f_sell_box')">
+                <button type="button" id="f_sell_box_usd" class="btn btn-outline-secondary btn-sm px-1" style="font-size:.7rem;min-width:36px;font-weight:bold" onclick="prodToggleCur('f_sell_box','usd')" title="USD">USD</button>
+                <button type="button" id="f_sell_box_lbp" class="btn btn-outline-secondary btn-sm px-1 opacity-50" style="font-size:.7rem;min-width:36px" onclick="prodToggleCur('f_sell_box','lbp')" title="LBP">LBP</button>
+            </div>
+            <div id="f_sell_box_hint" class="form-text text-muted"></div>
         </div>
         <div class="col-md-4" id="row-box-margin" style="display:none">
             <label class="form-label">Box Margin %</label>
@@ -439,10 +458,16 @@ function onUnitChange() {
     if (showBox) calcFromBox();
 }
 
+function sellBoxUSD() {
+    const inp = document.getElementById('f_sell_box');
+    const raw = parseFloat(inp?.value || 0);
+    return (inp?.dataset.cur === 'lbp') ? raw / PROD_RATE : raw;
+}
+
 function calcFromBox() {
     const upb     = Math.max(1, parseInt(document.getElementById('f_upb').value || 1));
     const costBox = parseFloat(document.getElementById('f_cost_box').value || 0);
-    const sellBox = parseFloat(document.getElementById('f_sell_box').value || 0);
+    const sellBox = sellBoxUSD();
     if (costBox > 0) document.getElementById('f_cost').value = (costBox / upb).toFixed(4);
     if (!document.getElementById('use-margin-box')?.checked && sellBox > 0)
         document.getElementById('f_sell').value = (sellBox / upb).toFixed(4);
@@ -457,7 +482,7 @@ function calcFromBox() {
 
 function calcBoxPrice() {
     const upb      = parseInt(document.getElementById('f_upb')?.value || 1);
-    const boxPrice = parseFloat(document.getElementById('f_sell_box')?.value || 0);
+    const boxPrice = sellBoxUSD();
     const cost     = parseFloat(document.getElementById('f_cost')?.value || 0);
     const el       = document.getElementById('box-margin-preview');
     if (!el) return;
@@ -492,6 +517,7 @@ function clearForm() {
     prodResetCur('f_cost');
     prodResetCur('f_sell');
     prodResetCur('f_cons_cost');
+    prodResetCur('f_sell_box');
     toggleType();
     toggleSource();
 }
@@ -520,6 +546,7 @@ function fillForm(p) {
     prodResetCur('f_cost');
     prodResetCur('f_sell');
     prodResetCur('f_cons_cost');
+    prodResetCur('f_sell_box');
     calcMargin();
     calcBoxPrice();
     toggleType();
@@ -638,6 +665,7 @@ function calcBoxSellFromMargin() {
         preview.className   = 'form-text text-muted'; return;
     }
     const boxSell = boxCost / (1 - pct / 100);
+    if (document.getElementById('f_sell_box')?.dataset.cur === 'lbp') prodToggleCur('f_sell_box', 'usd');
     document.getElementById('f_sell_box').value = boxSell.toFixed(4);
     preview.textContent = '→ Box sell: $' + boxSell.toFixed(2) + ' ($' + (boxSell / upb).toFixed(4) + '/unit)';
     preview.className   = 'form-text text-success fw-bold';
@@ -694,7 +722,7 @@ function prodResetCur(fieldId) {
 
 // Convert LBP fields to USD before product form submission
 document.querySelector('#productModal form')?.addEventListener('submit', function() {
-    ['f_cost','f_sell','f_cons_cost'].forEach(fieldId => {
+    ['f_cost','f_sell','f_cons_cost','f_sell_box'].forEach(fieldId => {
         const inp = document.getElementById(fieldId);
         if (!inp) return;
         const cur = inp.dataset.cur || 'usd';
@@ -766,6 +794,123 @@ function printSelectedBarcodes() {
     window.open('/dahdouh/pages/print_barcodes.php?ids=' + ids, '_blank');
 }
 
+// ── Low Stock Order Preview ───────────────────────────────────────────────────
+const LS_ITEMS = <?= json_encode(array_map(fn($r) => [
+    'id'      => (int)$r['id'],
+    'name'    => $r['name'],
+    'sup'     => $r['sup_name'] ?? '',
+    'stock'   => (float)$r['stock'],
+    'alert'   => (float)$r['low_stock_alert'],
+    'unit'    => $r['unit'] ?: 'pcs',
+    'cost'    => (float)$r['cost_price'],
+    'upb'     => (int)$r['units_per_box'],
+], $lowStockModal)) ?>;
+
+let lsRows = [];
+
+function openLowStockModal() {
+    lsRows = LS_ITEMS.map(p => {
+        const isBox   = p.upb > 1;
+        const boxCost = isBox ? p.cost * p.upb : p.cost;
+        const gap     = Math.max(0, p.alert - p.stock);
+        const qty     = Math.max(1, Math.ceil(isBox ? gap / p.upb : gap));
+        return { ...p, boxCost, qty, removed: false };
+    });
+    renderLsTable();
+    new bootstrap.Modal(document.getElementById('lowStockModal')).show();
+}
+
+function renderLsTable() {
+    const tbody = document.getElementById('ls-tbody');
+    tbody.innerHTML = lsRows.map((r, i) => {
+        if (r.removed) return '';
+        const total    = r.qty * r.boxCost;
+        const costCell = r.upb > 1
+            ? `$${r.cost.toFixed(2)}/unit &nbsp;<strong>$${r.boxCost.toFixed(2)}/box</strong>`
+            : `$${r.cost.toFixed(2)}`;
+        const qtyLabel = r.upb > 1 ? 'boxes' : r.unit;
+        return `<tr>
+            <td>${lsEsc(r.name)}<br><small class="text-muted">${lsEsc(r.sup)}</small></td>
+            <td class="text-center"><span class="${r.stock==0?'text-danger fw-bold':'text-warning fw-bold'}">${r.stock}</span> / ${r.alert}</td>
+            <td>${costCell}</td>
+            <td style="width:110px">
+                <div class="input-group input-group-sm">
+                    <input type="number" class="form-control form-control-sm" min="0" step="1" value="${r.qty}" onchange="lsSetQty(${i},this.value)">
+                    <span class="input-group-text px-1 text-muted" style="font-size:.7rem">${lsEsc(qtyLabel)}</span>
+                </div>
+            </td>
+            <td class="fw-bold text-end" id="ls-tot-${i}">$${total.toFixed(2)}</td>
+            <td class="text-center"><button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="lsRemove(${i})"><i class="bi bi-trash"></i></button></td>
+        </tr>`;
+    }).join('');
+    updateLsGrand();
+}
+
+function lsSetQty(i, val) {
+    lsRows[i].qty = Math.max(0, parseFloat(val) || 0);
+    const el = document.getElementById('ls-tot-' + i);
+    if (el) el.textContent = '$' + (lsRows[i].qty * lsRows[i].boxCost).toFixed(2);
+    updateLsGrand();
+}
+
+function lsRemove(i) {
+    lsRows[i].removed = true;
+    renderLsTable();
+}
+
+function updateLsGrand() {
+    const grand = lsRows.filter(r => !r.removed).reduce((s, r) => s + r.qty * r.boxCost, 0);
+    const el = document.getElementById('ls-grand');
+    if (el) el.textContent = '$' + grand.toFixed(2);
+}
+
+function lsEsc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function generateLowStockPDF() {
+    const active = lsRows.filter(r => !r.removed && r.qty > 0);
+    if (!active.length) { alert('No items to print.'); return; }
+    const grand = active.reduce((s, r) => s + r.qty * r.boxCost, 0);
+    const rows  = active.map((r, n) => {
+        const isBox    = r.upb > 1;
+        const costCell = isBox
+            ? `$${r.cost.toFixed(2)}/unit ($${r.boxCost.toFixed(2)}/box)`
+            : `$${r.cost.toFixed(2)}`;
+        const qtyLabel = isBox ? `${r.qty} box${r.qty>1?'es':''}` : `${r.qty} ${lsEsc(r.unit)}`;
+        return `<tr>
+            <td>${n+1}</td><td>${lsEsc(r.name)}</td><td>${lsEsc(r.sup)}</td>
+            <td class="${r.stock==0?'out':'low'}">${r.stock}</td>
+            <td>${r.alert}</td>
+            <td>${costCell}</td>
+            <td>${qtyLabel}</td>
+            <td style="text-align:right">$${(r.qty*r.boxCost).toFixed(2)}</td>
+        </tr>`;
+    }).join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Low Stock Order Preview</title>
+<style>
+@page{size:A4 portrait;margin:15mm}body{font-family:Arial,sans-serif;font-size:11px}
+h2{margin:0 0 3px;font-size:15px}p.sub{margin:0 0 10px;color:#666;font-size:10px}
+table{width:100%;border-collapse:collapse}
+th{background:#222;color:#fff;padding:5px 7px;text-align:left;font-size:10px}
+td{padding:4px 7px;border-bottom:1px solid #ddd;font-size:10px}
+tr:nth-child(even) td{background:#f9f9f9}.out{color:#c00;font-weight:bold}.low{color:#b06000}
+tfoot td{background:#eee;font-weight:bold;border-top:2px solid #333}
+</style></head><body>
+<h2>Low Stock Order Preview</h2>
+<p class="sub">Generated: ${new Date().toLocaleString()} &nbsp;|&nbsp; ${active.length} item(s)</p>
+<table>
+<thead><tr><th>#</th><th>Product</th><th>Supplier</th><th>In Stock</th><th>Min</th><th>Last Cost</th><th>Qty to Order</th><th style="text-align:right">Total</th></tr></thead>
+<tbody>${rows}</tbody>
+<tfoot><tr><td colspan="7" style="text-align:right">Grand Total</td><td style="text-align:right">$${grand.toFixed(2)}</td></tr></tfoot>
+</table>
+<script>window.onload=function(){window.print();};<\/script>
+</body></html>`;
+    const w = window.open('', '_blank');
+    w.document.write(html);
+    w.document.close();
+}
+
 // ── Batch viewer ──────────────────────────────────────────────────────────────
 function viewBatches(productId, productName) {
     document.getElementById('batch-modal-title').textContent = productName + ' — Batches';
@@ -807,6 +952,52 @@ function viewBatches(productId, productName) {
         .catch(() => { body.innerHTML = '<p class="text-danger">Failed to load batches.</p>'; });
 }
 </script>
+
+<!-- Low Stock Order Preview Modal -->
+<div class="modal fade" id="lowStockModal" tabindex="-1">
+<div class="modal-dialog modal-xl">
+<div class="modal-content">
+    <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-cart-check me-2 text-danger"></i>Low Stock — Order Preview</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body p-0">
+        <?php if (empty($lowStockModal)): ?>
+        <p class="text-success text-center py-4"><i class="bi bi-check-circle me-2"></i>No low stock items found — all products are above their alert level.</p>
+        <?php else: ?>
+        <table class="table table-sm table-hover mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>Product / Supplier</th>
+                    <th class="text-center">Stock / Min</th>
+                    <th>Last Cost</th>
+                    <th style="width:100px">Qty to Order</th>
+                    <th class="text-end">Line Total</th>
+                    <th style="width:50px"></th>
+                </tr>
+            </thead>
+            <tbody id="ls-tbody"></tbody>
+            <tfoot class="table-secondary fw-bold border-top border-2">
+                <tr>
+                    <td colspan="4" class="text-end pe-3">Grand Total</td>
+                    <td class="text-end" id="ls-grand">$0.00</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+        <?php endif; ?>
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <?php if (!empty($lowStockModal)): ?>
+        <button type="button" class="btn btn-danger" onclick="generateLowStockPDF()">
+            <i class="bi bi-file-earmark-pdf me-1"></i>Generate PDF
+        </button>
+        <?php endif; ?>
+    </div>
+</div>
+</div>
+</div>
 
 <!-- Batch Viewer Modal -->
 <div class="modal fade" id="batchModal" tabindex="-1">
