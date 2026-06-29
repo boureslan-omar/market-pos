@@ -36,9 +36,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$desc || $amt <= 0) {
         $message = 'error:Description and a positive amount are required.';
     } elseif ($expenseId > 0) {
-        // Edit existing expense — update record only (cash register already logged)
+        // Fetch original amount before update
+        $origStmt = $pdo->prepare("SELECT amount, description FROM expenses WHERE id=?");
+        $origStmt->execute([$expenseId]);
+        $origRow = $origStmt->fetch(PDO::FETCH_ASSOC);
+
         $pdo->prepare("UPDATE expenses SET description=?, amount=?, category=?, expense_date=?, note=? WHERE id=?")
             ->execute([$desc, $amt, $cat, $date, $note, $expenseId]);
+
+        // Adjust cash register if the USD amount changed
+        if ($origRow && abs((float)$origRow['amount'] - $amt) > 0.0001) {
+            $oldAmt  = (float)$origRow['amount'];
+            $oldDesc = $origRow['description'];
+            $escaped = str_replace(['\\','%','_'], ['\\\\','\\%','\\_'], $oldDesc);
+            $logStmt = $pdo->prepare("SELECT currency, amount_usd, amount_lbp FROM cash_register_log WHERE type='expense' AND note LIKE ? ESCAPE '\\\\' ORDER BY id DESC LIMIT 1");
+            $logStmt->execute(["Expense: {$escaped}%"]);
+            $logRow = $logStmt->fetch(PDO::FETCH_ASSOC);
+            if ($logRow) {
+                $adjNote = "Expense adjustment: $desc";
+                if ($logRow['currency'] === 'LBP' && (float)$logRow['amount_lbp'] != 0) {
+                    $origLBP  = abs((float)$logRow['amount_lbp']);
+                    $newLBP   = $oldAmt > 0 ? round($origLBP * ($amt / $oldAmt)) : 0;
+                    $deltaLBP = -($newLBP - $origLBP);
+                    if (abs($deltaLBP) > 0) logCashEntry($pdo, 'expense', 0, $adjNote, null, $deltaLBP, 'LBP');
+                } else {
+                    $deltaUSD = -($amt - $oldAmt);
+                    logCashEntry($pdo, 'expense', $deltaUSD, $adjNote);
+                }
+            }
+        }
         $message = 'success:Expense updated.';
     } else {
         $pdo->prepare("INSERT INTO expenses (description, amount, category, expense_date, note) VALUES (?,?,?,?,?)")

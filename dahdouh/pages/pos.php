@@ -467,7 +467,7 @@ function printPosReceipt() {
 
 <!-- ═══════════ CHECKOUT MODAL ═══════════ -->
 <div class="modal fade" id="checkoutModal" tabindex="-1">
-<div class="modal-dialog modal-lg">
+<div class="modal-dialog modal-lg modal-dialog-scrollable">
 <div class="modal-content">
     <div class="modal-header text-white" style="background:#1a3a1a">
         <div>
@@ -521,23 +521,45 @@ function printPosReceipt() {
             </div>
         </div>
 
-        <!-- Cash inputs (shown for cash method only) -->
+        <!-- Cash inputs + embedded numpad side-by-side -->
         <div id="modal-cash-section">
-            <div class="row g-3 mb-3">
-                <div class="col-6">
-                    <label class="form-label fw-semibold">Cash Given (USD)</label>
-                    <div class="input-group input-group-lg">
-                        <span class="input-group-text text-success fw-bold">$</span>
-                        <input type="number" id="modal-paid-usd" class="form-control text-end"
-                               placeholder="0.00" min="0" step="0.01" oninput="calcModalChange()">
+            <div class="row g-2 align-items-start mb-3">
+                <!-- Left: amount fields -->
+                <div class="col-5 d-flex flex-column gap-2">
+                    <div>
+                        <label class="form-label small fw-semibold mb-1 text-success">Cash Given (USD)</label>
+                        <div class="input-group input-group-lg" onclick="vnumSetField('usd')" style="cursor:pointer">
+                            <span class="input-group-text text-success fw-bold">$</span>
+                            <input type="number" id="modal-paid-usd" class="form-control text-end fw-bold"
+                                   placeholder="0.00" min="0" step="0.01" oninput="calcModalChange()"
+                                   onfocus="vnumSetField('usd')" readonly style="cursor:pointer;font-size:1.1rem">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label small fw-semibold mb-1" style="color:#b8860b">Cash Given (LBP)</label>
+                        <div class="input-group input-group-lg" onclick="vnumSetField('lbp')" style="cursor:pointer">
+                            <span class="input-group-text fw-bold" style="color:#b8860b">LL</span>
+                            <input type="number" id="modal-paid-lbp" class="form-control text-end fw-bold"
+                                   placeholder="0" min="0" step="1000" oninput="calcModalChange()"
+                                   onfocus="vnumSetField('lbp')" readonly style="cursor:pointer;font-size:1.1rem">
+                        </div>
                     </div>
                 </div>
-                <div class="col-6">
-                    <label class="form-label fw-semibold">Cash Given (LBP)</label>
-                    <div class="input-group input-group-lg">
-                        <span class="input-group-text fw-bold" style="color:#b8860b">LL</span>
-                        <input type="number" id="modal-paid-lbp" class="form-control text-end"
-                               placeholder="0" min="0" step="1000" oninput="calcModalChange()">
+                <!-- Right: numpad -->
+                <div class="col-7">
+                    <div id="em-numpad" class="p-2 rounded" style="background:#1e293b">
+                        <div class="btn-group w-100 mb-2 btn-group-sm">
+                            <button type="button" id="em-tab-usd" class="btn btn-success active" onclick="vnumSetField('usd')"><i class="bi bi-currency-dollar"></i> USD</button>
+                            <button type="button" id="em-tab-lbp" class="btn btn-outline-warning" onclick="vnumSetField('lbp')">LL LBP</button>
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:5px">
+                            <?php foreach (['7','8','9','4','5','6','1','2','3','.','0','⌫'] as $k): ?>
+                            <button type="button" onclick="vnumPress('<?= $k ?>')"
+                                    style="background:<?= $k==='⌫'?'#dc2626':'#334155' ?>;color:#fff;border:none;border-radius:8px;font-size:1.3rem;font-weight:700;padding:10px 0;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:manipulation"
+                                    ontouchstart="this.style.opacity='.6'" ontouchend="this.style.opacity='1'"><?= $k ?></button>
+                            <?php endforeach; ?>
+                        </div>
+                        <button type="button" onclick="vnumClear()" style="width:100%;background:#475569;color:#fff;border:none;border-radius:8px;padding:7px;font-size:.85rem;cursor:pointer">C — Clear</button>
                     </div>
                 </div>
             </div>
@@ -1485,82 +1507,34 @@ function saveNewCustPos() {
 }
 </script>
 
-<!-- ── Floating Virtual Numpad ────────────────────────────────────────────── -->
-<div id="vnum-overlay" onclick="closeNumpad()" style="display:none;position:fixed;inset:0;z-index:2040;background:transparent"></div>
-<div id="vnum-pad" style="display:none;position:fixed;z-index:2050;background:#1e293b;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.45);padding:10px;width:200px;touch-action:none">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <div id="vnum-display" style="flex:1;color:#fff;font-size:1.15rem;font-weight:700;font-family:monospace;text-align:right;padding:4px 8px;background:#0f172a;border-radius:8px;min-height:32px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">0</div>
-        <button onclick="closeNumpad()" style="background:none;border:none;color:#94a3b8;font-size:1.2rem;padding:2px 6px;cursor:pointer;line-height:1">✕</button>
-    </div>
-    <div id="vnum-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px">
-        <?php foreach (['7','8','9','4','5','6','1','2','3','.','0','⌫'] as $k): ?>
-        <button onclick="vnumKey('<?= $k ?>')" style="background:#334155;color:#fff;border:none;border-radius:9px;font-size:1.1rem;font-weight:600;padding:11px 0;cursor:pointer;transition:background .1s;user-select:none" ontouchstart="this.style.background='#0d6efd'" ontouchend="this.style.background='#334155'"><?= $k ?></button>
-        <?php endforeach; ?>
-    </div>
-    <button onclick="vnumApply()" style="margin-top:6px;width:100%;background:#0d6efd;color:#fff;border:none;border-radius:9px;font-size:1rem;font-weight:700;padding:10px;cursor:pointer">✓ Apply</button>
-</div>
-
 <script>
-let vnumTarget = null;
-let vnumVal    = '';
+let _vnumField = 'usd';
 
-function openNumpad(inp) {
-    vnumTarget = inp;
-    vnumVal    = inp.value || '';
-    document.getElementById('vnum-display').textContent = vnumVal || '0';
-    const pad = document.getElementById('vnum-pad');
-    const rect = inp.getBoundingClientRect();
-    const winH = window.innerHeight;
-    const padH = 280;
-    let top = rect.bottom + 6;
-    if (top + padH > winH - 10) top = Math.max(10, rect.top - padH - 6);
-    let left = rect.left;
-    if (left + 200 > window.innerWidth - 10) left = window.innerWidth - 210;
-    pad.style.top  = top + 'px';
-    pad.style.left = left + 'px';
-    pad.style.display = '';
-    document.getElementById('vnum-overlay').style.display = '';
+function vnumSetField(which) {
+    _vnumField = which;
+    document.getElementById('em-tab-usd').className = which === 'usd' ? 'btn btn-success active' : 'btn btn-outline-success';
+    document.getElementById('em-tab-lbp').className = which === 'lbp' ? 'btn btn-warning active' : 'btn btn-outline-warning';
 }
 
-function closeNumpad() {
-    document.getElementById('vnum-pad').style.display = 'none';
-    document.getElementById('vnum-overlay').style.display = 'none';
-    vnumTarget = null;
-    vnumVal    = '';
-}
-
-function vnumKey(k) {
+function vnumPress(k) {
+    const inp = document.getElementById(_vnumField === 'usd' ? 'modal-paid-usd' : 'modal-paid-lbp');
+    if (!inp) return;
+    let v = inp.value || '';
     if (k === '⌫') {
-        vnumVal = vnumVal.slice(0, -1);
+        v = v.slice(0, -1);
     } else if (k === '.') {
-        if (!vnumVal.includes('.')) vnumVal += '.';
+        if (!v.includes('.')) v += '.';
     } else {
-        if (vnumVal === '0') vnumVal = k;
-        else vnumVal += k;
+        if (v === '0') v = k; else v += k;
     }
-    document.getElementById('vnum-display').textContent = vnumVal || '0';
+    inp.value = v;
+    calcModalChange();
 }
 
-function vnumApply() {
-    if (vnumTarget && vnumVal !== '') {
-        vnumTarget.value = vnumVal;
-        vnumTarget.dispatchEvent(new Event('input', { bubbles: true }));
-        vnumTarget.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-    closeNumpad();
+function vnumClear() {
+    const inp = document.getElementById(_vnumField === 'usd' ? 'modal-paid-usd' : 'modal-paid-lbp');
+    if (inp) { inp.value = ''; calcModalChange(); }
 }
-
-// Attach numpad to checkout modal amount inputs when the modal opens
-document.addEventListener('shown.bs.modal', function(e) {
-    if (e.target.id !== 'checkoutModal') return;
-    ['modal-paid-usd','modal-paid-lbp','modal-debt-input'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el && !el._vnumBound) {
-            el._vnumBound = true;
-            el.addEventListener('focus', function() { openNumpad(this); });
-        }
-    });
-});
 </script>
 
 <?php renderFoot(); ?>
