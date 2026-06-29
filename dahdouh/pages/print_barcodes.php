@@ -47,8 +47,9 @@ body { background: #fff; font-family: Arial, sans-serif; }
 .label .price-lbp { font-size: 8px; color: #9ca3af; }
 
 @media print {
-    .no-print { display: none !important; }
-    body { padding: 0; }
+    @page { margin: 0; size: auto; }
+    .no-print { display: none !important; height: 0 !important; overflow: hidden !important; }
+    body { margin: 0; padding: 0; }
     .label-grid { padding: 4mm; gap: 4mm; }
     .label { border: 1px solid #999; }
 }

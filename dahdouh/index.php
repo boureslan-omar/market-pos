@@ -160,4 +160,13 @@ new Chart(document.getElementById('weeklyChart'), {
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
 });
 </script>
+<?php if ($_SESSION['role'] === 'admin' && setting('update_manifest_url','')): ?>
+<script>
+// Silently trigger background update check once per session
+if (!sessionStorage.getItem('upd_checked')) {
+    sessionStorage.setItem('upd_checked', '1');
+    fetch('/dahdouh/pages/api.php?action=trigger_update').catch(()=>{});
+}
+</script>
+<?php endif; ?>
 <?php renderFoot(); ?>

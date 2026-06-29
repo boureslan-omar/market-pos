@@ -23,20 +23,21 @@ if (isset($_GET['delete'])) {
 
 // ── Save / edit supplier ──────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save') {
-    $id      = (int)($_POST['id'] ?? 0);
-    $name    = trim($_POST['name'] ?? '');
-    $phone   = trim($_POST['phone'] ?? '');
-    $email   = trim($_POST['email'] ?? '');
-    $address = trim($_POST['address'] ?? '');
+    $id         = (int)($_POST['id'] ?? 0);
+    $name       = trim($_POST['name'] ?? '');
+    $phone      = trim($_POST['phone'] ?? '');
+    $email      = trim($_POST['email'] ?? '');
+    $address    = trim($_POST['address'] ?? '');
+    $customerId = (int)($_POST['customer_id'] ?? 0) ?: null;
 
     if (!$name) { $message = 'error:Name is required.'; }
     else {
         if ($id) {
-            $pdo->prepare("UPDATE suppliers SET name=?,phone=?,email=?,address=? WHERE id=?")
-                ->execute([$name,$phone,$email,$address,$id]);
+            $pdo->prepare("UPDATE suppliers SET name=?,phone=?,email=?,address=?,customer_id=? WHERE id=?")
+                ->execute([$name,$phone,$email,$address,$customerId,$id]);
         } else {
-            $pdo->prepare("INSERT INTO suppliers (name,phone,email,address) VALUES (?,?,?,?)")
-                ->execute([$name,$phone,$email,$address]);
+            $pdo->prepare("INSERT INTO suppliers (name,phone,email,address,customer_id) VALUES (?,?,?,?,?)")
+                ->execute([$name,$phone,$email,$address,$customerId]);
         }
         $message = 'success:Supplier saved.';
     }
@@ -57,11 +58,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'payme
 
     $payNote = ($note ?: "Payment to $supName");
 
+    // Get linked customer_id for this supplier
+    $supFull = $pdo->prepare("SELECT customer_id FROM suppliers WHERE id=?");
+    $supFull->execute([$sid]);
+    $linkedCustId = (int)($supFull->fetchColumn() ?: 0);
+
+    $paidUSD = 0;
     if ($method === 'cash_usd' && $amount > 0 && $sid) {
         logCashEntry($pdo, 'withdrawal', -$amount, $payNote);
         $pdo->prepare("UPDATE suppliers SET balance = balance - ? WHERE id=?")->execute([$amount, $sid]);
         $pdo->prepare("INSERT INTO supplier_ledger (supplier_id, type, amount, note) VALUES (?,?,?,?)")
             ->execute([$sid, 'payment', -$amount, $payNote]);
+        $paidUSD = $amount;
         $message = "success:Payment of " . fmtUSD($amount) . " recorded — deducted from USD cash register.";
     } elseif ($method === 'cash_lbp' && $amountLBP > 0 && $sid) {
         // Convert LBP to USD equivalent to update supplier balance (balance stored in USD)
@@ -70,12 +78,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'payme
         $pdo->prepare("UPDATE suppliers SET balance = balance - ? WHERE id=?")->execute([$amountUSDEquiv, $sid]);
         $pdo->prepare("INSERT INTO supplier_ledger (supplier_id, type, amount, note) VALUES (?,?,?,?)")
             ->execute([$sid, 'payment', -$amountUSDEquiv, $payNote . " (LL " . number_format($amountLBP) . " = " . fmtUSD($amountUSDEquiv) . ")"]);
+        $paidUSD = $amountUSDEquiv;
         $message = "success:LBP payment of LL " . number_format($amountLBP) . " (" . fmtUSD($amountUSDEquiv) . ") recorded — deducted from LBP cash register.";
     } elseif ($amount > 0 && $sid) {
         $pdo->prepare("UPDATE suppliers SET balance = balance - ? WHERE id=?")->execute([$amount, $sid]);
         $pdo->prepare("INSERT INTO supplier_ledger (supplier_id, type, amount, note) VALUES (?,?,?,?)")
             ->execute([$sid, 'payment', -$amount, $payNote]);
+        $paidUSD = $amount;
         $message = "success:Payment of " . fmtUSD($amount) . " recorded.";
+    }
+
+    // Option A: auto-credit linked customer when supplier is paid
+    if ($linkedCustId > 0 && $paidUSD > 0) {
+        $custNote = "Supplier credit from payment to $supName";
+        $pdo->prepare("UPDATE customers SET balance = balance + ? WHERE id=?")->execute([$paidUSD, $linkedCustId]);
+        $pdo->prepare("INSERT INTO customer_ledger (customer_id, sale_id, type, amount, note) VALUES (?,NULL,'credit',?,?)")
+            ->execute([$linkedCustId, $paidUSD, $custNote]);
+        $message .= ' Linked customer credited ' . fmtUSD($paidUSD) . '.';
     }
 }
 
@@ -132,15 +151,19 @@ $search = trim($_GET['q'] ?? '');
 $suppliers = $pdo->prepare("
     SELECT s.*,
            COUNT(DISTINCT p.id) AS product_count,
-           COUNT(DISTINCT pu.id) AS purchase_count
+           COUNT(DISTINCT pu.id) AS purchase_count,
+           c.name AS linked_customer_name
     FROM suppliers s
     LEFT JOIN products p ON p.supplier_id=s.id
     LEFT JOIN purchases pu ON pu.supplier_id=s.id
+    LEFT JOIN customers c ON c.id=s.customer_id
     " . ($search ? "WHERE s.name LIKE ? OR s.phone LIKE ?" : '') . "
     GROUP BY s.id ORDER BY s.name
 ");
 $suppliers->execute($search ? ["%$search%", "%$search%"] : []);
 $suppliers = $suppliers->fetchAll();
+
+$allCustomers = $pdo->query("SELECT id, name FROM customers ORDER BY name")->fetchAll();
 
 $totalOwed = array_sum(array_column($suppliers, 'balance'));
 
@@ -343,6 +366,7 @@ alertBox($message);
         <td>
             <div><?= htmlspecialchars($s['phone'] ?: '—') ?></div>
             <?php if ($s['email']): ?><div class="small text-muted"><?= htmlspecialchars($s['email']) ?></div><?php endif; ?>
+            <?php if ($s['linked_customer_name']): ?><div class="small"><i class="bi bi-person-check text-success"></i> <?= htmlspecialchars($s['linked_customer_name']) ?></div><?php endif; ?>
         </td>
         <td>
             <?php if ($bal > 0): ?>
@@ -388,6 +412,15 @@ alertBox($message);
             <div class="col-md-6"><label class="form-label">Email</label><input type="email" name="email" id="sf_email" class="form-control"></div>
         </div>
         <div class="mt-3"><label class="form-label">Address</label><textarea name="address" id="sf_address" class="form-control" rows="2"></textarea></div>
+        <div class="mt-3">
+            <label class="form-label">Linked Customer <small class="text-muted">(optional — payments auto-credit this customer)</small></label>
+            <select name="customer_id" id="sf_customer_id" class="form-select">
+                <option value="">— None —</option>
+                <?php foreach ($allCustomers as $c): ?>
+                <option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['name']) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
     </div>
     <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -429,6 +462,7 @@ function setSupCur(sid, cur, balUSD, balLBP, rate) {
 
 function clearSupForm() {
     ['sf_id','sf_name','sf_phone','sf_email','sf_address'].forEach(id => { const e=document.getElementById(id); if(e) e.value=''; });
+    const csel = document.getElementById('sf_customer_id'); if (csel) csel.value = '';
 }
 function fillSupForm(s) {
     document.getElementById('sf_id').value      = s.id;
@@ -436,6 +470,8 @@ function fillSupForm(s) {
     document.getElementById('sf_phone').value   = s.phone || '';
     document.getElementById('sf_email').value   = s.email || '';
     document.getElementById('sf_address').value = s.address || '';
+    const csel = document.getElementById('sf_customer_id');
+    if (csel) csel.value = s.customer_id || '';
 }
 </script>
 <?php renderFoot(); ?>

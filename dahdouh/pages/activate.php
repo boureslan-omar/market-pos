@@ -26,8 +26,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Save the license file
         if (file_put_contents(LIC_FILE, $key) !== false) {
             $_SESSION[LIC_SESSION] = $client;
-            $success = true;
-            $message = "License activated for: <strong>" . htmlspecialchars($client) . "</strong>";
+            $success    = true;
+            $clientName = htmlspecialchars($client['client'] ?? '');
+            $licType    = $client['type'] ?? 'lifetime';
+            $expiresAt  = $client['expires_at'] ?? 0;
+            $message    = "License activated for: <strong>$clientName</strong>";
+            if ($licType === 'yearly' && $expiresAt > 0) {
+                $message .= '<br><span class="small text-muted">Annual license &mdash; valid until ' . date('d M Y', $expiresAt) . '</span>';
+            } else {
+                $message .= '<br><span class="small text-muted">Lifetime license</span>';
+            }
         } else {
             $message = "Could not write license file. Check folder permissions.";
         }

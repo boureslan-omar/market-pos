@@ -153,6 +153,7 @@ $rate            = EXCHANGE_RATE;
 $autoPrint       = AUTO_PRINT;
 $custDisplay     = CUSTOMER_DISPLAY;
 $cashDrawer      = CASH_DRAWER;
+$vfdEnabled      = VFD_ENABLED;
 
 renderHead('POS — Sale');
 renderNav('pos');
@@ -202,12 +203,19 @@ renderNav('pos');
         <thead><tr><th>Item</th><th class="text-end">Qty</th><th class="text-end">Price</th><th class="text-end">Total</th></tr></thead>
         <tbody>
         <?php foreach ($lastSale['items'] as $si): ?>
+        <?php if ($si['product_type'] === 'bulk'): ?>
+        <tr>
+            <td colspan="3"><?= htmlspecialchars($si['product_name']) ?></td>
+            <td class="text-end"><?= fmtUSD($si['total']) ?></td>
+        </tr>
+        <?php else: ?>
         <tr>
             <td><?= htmlspecialchars($si['product_name']) ?></td>
             <td class="text-end"><?= (float)$si['quantity'] ?></td>
             <td class="text-end"><?= fmtUSD($si['unit_price']) ?></td>
             <td class="text-end"><?= fmtUSD($si['total']) ?></td>
         </tr>
+        <?php endif; ?>
         <?php endforeach; ?>
         </tbody>
     </table>
@@ -262,11 +270,11 @@ function printPosReceipt() {
         '<style>' +
         '@page{size:80mm auto;margin:3mm 4mm}' +
         '*{color:#000!important;background:transparent!important}' +
-        'body{font-family:"Courier New",Courier,monospace;font-size:12px;width:72mm;margin:0;padding:0}' +
+        'body{font-family:"Courier New",Courier,monospace;font-size:12px;width:72mm;margin:0;padding:0;font-weight:bold}' +
         'img{max-width:60mm;height:auto;display:block;margin:0 auto 4px}' +
         'table{width:100%;border-collapse:collapse}' +
-        'th{font-size:11px;border-bottom:1px dashed #000;padding:2px 0;text-align:left}' +
-        'td{font-size:11px;padding:2px 0;vertical-align:top}' +
+        'th{font-size:11px;border-bottom:1px dashed #000;padding:2px 0;text-align:left;font-weight:bold}' +
+        'td{font-size:11px;padding:2px 0;vertical-align:top;font-weight:bold}' +
         '.text-end{text-align:right}.text-center{text-align:center}' +
         '.fw-bold{font-weight:bold}.fw-semibold{font-weight:600}.fs-5{font-size:13px}' +
         '.d-flex{display:flex}.justify-content-between{justify-content:space-between}' +
@@ -346,8 +354,9 @@ function printPosReceipt() {
                 <div style="font-size:.55rem;font-weight:700;color:#fff;background:#7c3aed;border-radius:3px;padding:1px 4px;margin-bottom:3px;display:inline-block">CONSIGN</div>
             <?php endif; ?>
             <div class="prod-name"><?= htmlspecialchars($p['name']) ?></div>
-            <div class="prod-price"><?= fmtUSD($p['sell_price']) ?><?php if (($p['sell_price_box'] ?? 0) > 0 && ($p['units_per_box'] ?? 1) > 1): ?><span style="font-size:.65rem;font-weight:400;opacity:.65"> /pcs</span><?php endif; ?></div>
-            <div class="prod-lbp"><?= fmtLBP($p['sell_price'] * $rate) ?></div>
+            <?php $hasBox = ($p['sell_price_box'] ?? 0) > 0 && ($p['units_per_box'] ?? 1) > 1; ?>
+            <div class="prod-price"><?php if ($hasBox): ?><?= fmtUSD($p['sell_price_box']) ?><span style="font-size:.65rem;font-weight:400;opacity:.65"> /box</span><?php else: ?><?= fmtUSD($p['sell_price']) ?><?php endif; ?></div>
+            <div class="prod-lbp"><?php if ($hasBox): ?><?= fmtUSD($p['sell_price']) ?> /pcs<?php else: ?><?= fmtLBP($p['sell_price'] * $rate) ?><?php endif; ?></div>
             <?php if ($isBulk): ?>
                 <div class="prod-stock" style="color:#6c757d">tap to enter price</div>
             <?php elseif ($outStock): ?>
@@ -360,12 +369,6 @@ function printPosReceipt() {
                 <div class="prod-stock" style="color:#22c55e">
                     <?php if (($p['units_per_box'] ?? 1) > 1): ?><?= floor((float)$p['stock'] / (int)$p['units_per_box']) ?> box · <?= (float)$p['stock'] ?> units<?php else: ?><?= (float)$p['stock'] ?> <?= htmlspecialchars($p['unit']) ?><?php endif; ?>
                 </div>
-            <?php endif; ?>
-            <?php if (!$isBulk && !$outStock && ($p['sell_price_box'] ?? 0) > 0 && ($p['units_per_box'] ?? 1) > 1): ?>
-            <button type="button" onclick="event.stopPropagation();tileBoxClick(this.closest('.prod-card'))"
-                    style="margin-top:4px;width:100%;font-size:.6rem;padding:2px 4px;border:1px solid #0d6efd;border-radius:4px;background:#e7f1ff;color:#0d6efd;cursor:pointer">
-                📦 Box ×<?= (int)$p['units_per_box'] ?> — <?= fmtUSD($p['sell_price_box']) ?>
-            </button>
             <?php endif; ?>
         </div>
     </div>
@@ -382,7 +385,7 @@ function printPosReceipt() {
 <!-- Customer selector -->
 <div class="mb-2">
     <div class="input-group input-group-sm">
-        <span class="input-group-text"><i class="bi bi-person"></i></span>
+        <button type="button" class="input-group-text btn btn-outline-secondary" onclick="openNewCustModal()" title="Add new customer"><i class="bi bi-person-plus"></i></button>
         <input type="text" id="cust-search" class="form-control" placeholder="Customer (type to search or leave for cash sale)" autocomplete="off">
         <button class="btn btn-outline-secondary" onclick="clearCustomer()" title="Cash sale (no customer)"><i class="bi bi-x"></i></button>
     </div>
@@ -610,6 +613,38 @@ function printPosReceipt() {
 </div>
 </div>
 
+<!-- New Customer Modal (from POS) -->
+<div class="modal fade" id="newCustPosModal" tabindex="-1">
+<div class="modal-dialog modal-sm">
+<div class="modal-content">
+    <div class="modal-header py-2">
+        <h6 class="modal-title"><i class="bi bi-person-plus me-2"></i>New Customer</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+        <div class="mb-2">
+            <label class="form-label small fw-semibold mb-1">Name <span class="text-danger">*</span></label>
+            <input type="text" id="nc-name" class="form-control form-control-sm" placeholder="Full name">
+        </div>
+        <div class="mb-2">
+            <label class="form-label small fw-semibold mb-1">Phone</label>
+            <input type="text" id="nc-phone" class="form-control form-control-sm" placeholder="Optional">
+        </div>
+        <div class="mb-1">
+            <label class="form-label small fw-semibold mb-1">Opening Balance ($)</label>
+            <input type="number" id="nc-balance" class="form-control form-control-sm" value="0" step="0.01" placeholder="0 = no credit/debt">
+            <div class="form-text">Positive = credit, negative = debt</div>
+        </div>
+        <div class="text-danger small mt-1" id="nc-error"></div>
+    </div>
+    <div class="modal-footer py-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="saveNewCustPos()">Save &amp; Select</button>
+    </div>
+</div>
+</div>
+</div>
+
 <!-- Held Sales Modal -->
 <div class="modal fade" id="heldSalesModal" tabindex="-1">
 <div class="modal-dialog">
@@ -633,6 +668,7 @@ const EXCHANGE_RATE       = <?= $rate ?>;
 const AUTO_PRINT_SETTING  = <?= $autoPrint    ? 'true' : 'false' ?>;
 const CUSTOMER_DISPLAY_ON = <?= $custDisplay  ? 'true' : 'false' ?>;
 const CASH_DRAWER_ON      = <?= $cashDrawer   ? 'true' : 'false' ?>;
+const VFD_ON              = <?= $vfdEnabled   ? 'true' : 'false' ?>;
 
 // ─── Cash Drawer ──────────────────────────────────────────────────────────────
 function openCashDrawer() {
@@ -667,6 +703,20 @@ function syncDisplay() {
     localStorage.setItem('posDisplay', JSON.stringify({items, total}));
 }
 
+let _vfdTimer = null;
+function syncVFD(total) {
+    if (!VFD_ON) return;
+    clearTimeout(_vfdTimer);
+    _vfdTimer = setTimeout(() => {
+        const itemCount = Object.keys(cart).length;
+        const line1 = itemCount === 0 ? 'Welcome!' : itemCount + ' item' + (itemCount>1?'s':'');
+        const fd = new FormData();
+        fd.append('total', total.toFixed(2));
+        fd.append('line1', line1);
+        fetch('/dahdouh/pages/api.php?action=vfd_display', { method: 'POST', body: fd }).catch(()=>{});
+    }, 300);
+}
+
 // ─── Category filter ─────────────────────────────────────────────────────────
 document.querySelectorAll('.cat-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -689,39 +739,63 @@ document.querySelectorAll('.cat-btn').forEach(btn => {
 
 // ─── Product tile click ───────────────────────────────────────────────────────
 function tileClick(el) {
-    const type  = el.dataset.type;
-    const id    = el.dataset.pid;
-    const name  = el.dataset.name;
-    const price = parseFloat(el.dataset.price);
-    const cost  = parseFloat(el.dataset.cost);
-    const stock = parseFloat(el.dataset.stock);
-    const isOut = el.dataset.out === '1';
+    const type     = el.dataset.type;
+    const id       = el.dataset.pid;
+    const name     = el.dataset.name;
+    const price    = parseFloat(el.dataset.price);
+    const cost     = parseFloat(el.dataset.cost);
+    const stock    = parseFloat(el.dataset.stock);
+    const isOut    = el.dataset.out === '1';
+    const upb      = parseInt(el.dataset.upb || 1);
+    const boxPrice = parseFloat(el.dataset.boxprice || 0);
     if (type === 'bulk') {
         promptBulkAdd(id, name, price);
     } else if (isOut) {
         showToast('Out of stock', 'danger');
+    } else if (upb > 1 && boxPrice > 0) {
+        addBoxToCartFlash(el, id, name, boxPrice, price, cost, stock, upb);
     } else {
         addToCartFlash(el, id, name, price, cost, stock, 'regular');
     }
 }
 
-function tileBoxClick(el) {
-    const id       = el.dataset.pid;
-    const name     = el.dataset.name;
-    const boxPrice = parseFloat(el.dataset.boxprice);
-    const cost     = parseFloat(el.dataset.cost);
-    const stock    = parseFloat(el.dataset.stock);
-    const upb      = parseInt(el.dataset.upb || 1);
-    const cartKey  = id + '_b';
-    const alreadyUsed = (cart[id]?.qty || 0) + (cart[cartKey]?.qty || 0);
-    if (stock - alreadyUsed < upb) { showToast('Not enough stock for a full box', 'warning'); return; }
-    if (cart[cartKey]) {
-        cart[cartKey].qty += upb;
-    } else {
-        cart[cartKey] = { pid: id, name, price: boxPrice, cost, qty: upb, stock, type: 'regular', isBox: true, upb };
-    }
+function addBoxToCartFlash(el, id, name, boxPrice, unitPrice, cost, stock, upb) {
     el.classList.add('prod-flash');
     setTimeout(() => el.classList.remove('prod-flash'), 300);
+    addBoxToCart(id, name, boxPrice, unitPrice, cost, stock, upb);
+}
+
+function addBoxToCart(id, name, boxPrice, unitPrice, cost, stock, upb) {
+    id = String(id);
+    if (cart[id]) {
+        if (cart[id].isBox) {
+            if (cart[id].qty + upb > stock) { showToast('Max stock reached', 'warning'); return; }
+            cart[id].qty += upb;
+        } else {
+            // already as pcs — switch to box mode
+            cart[id].isBox     = true;
+            cart[id].price     = boxPrice;
+            cart[id].boxPrice  = boxPrice;
+            cart[id].unitPrice = unitPrice;
+            cart[id].upb       = upb;
+            cart[id].qty       = Math.max(upb, Math.ceil(cart[id].qty / upb) * upb);
+        }
+    } else {
+        cart[id] = { name, price: boxPrice, boxPrice, unitPrice, cost: parseFloat(cost), qty: upb, stock: parseFloat(stock)||999, type: 'regular', isBox: true, upb };
+    }
+    renderCart();
+}
+
+function toggleBoxMode(id) {
+    if (!cart[id] || !cart[id].upb || cart[id].upb <= 1) return;
+    const item = cart[id];
+    item.isBox = !item.isBox;
+    if (item.isBox) {
+        item.price = item.boxPrice;
+        item.qty   = Math.max(item.upb, Math.ceil(item.qty / item.upb) * item.upb);
+    } else {
+        item.price = item.unitPrice;
+    }
     renderCart();
 }
 
@@ -747,6 +821,8 @@ function triggerSearch() {
                 document.getElementById('bulk-modal-title').textContent = d.name;
                 new bootstrap.Modal(document.getElementById('bulkModal')).show();
                 setTimeout(() => document.getElementById('bulk-price').focus(), 300);
+            } else if (parseInt(d.units_per_box) > 1 && parseFloat(d.sell_price_box) > 0) {
+                addBoxToCart(d.id, d.name, parseFloat(d.sell_price_box), parseFloat(d.sell_price), d.cost_price, d.stock, parseInt(d.units_per_box));
             } else {
                 addToCart(d.id, d.name, d.sell_price, d.cost_price, d.stock, 'regular');
             }
@@ -789,16 +865,10 @@ function addToCartFlash(el, id, name, price, cost, stock, type) {
 function addToCart(id, name, price, cost, stock, type = 'regular', forceQty = null) {
     id = String(id);
     if (cart[id] && type !== 'bulk') {
-        if (type === 'regular') {
-            const used = cart[id].qty + (cart[id + '_b']?.qty || 0);
-            if (used >= stock) { showToast('No more stock','warning'); return; }
-        }
+        if (type === 'regular' && cart[id].qty >= stock) { showToast('No more stock','warning'); return; }
         cart[id].qty = parseFloat((cart[id].qty + 1).toFixed(3));
     } else {
-        if (type === 'regular') {
-            const usedByBox = cart[id + '_b']?.qty || 0;
-            if (stock - usedByBox < 1) { showToast('Out of stock','danger'); return; }
-        }
+        if (type === 'regular' && (parseFloat(stock)||999) < 1) { showToast('Out of stock','danger'); return; }
         cart[id] = { name, price: parseFloat(price), cost: parseFloat(cost), qty: forceQty || 1, stock: parseFloat(stock)||999, type };
     }
     if (forceQty !== null) cart[id].qty = forceQty;
@@ -810,8 +880,7 @@ function changeQty(id, delta) {
     const newQty = parseFloat((cart[id].qty + delta).toFixed(3));
     if (newQty <= 0) { delete cart[id]; }
     else if (cart[id].type === 'regular') {
-        const otherKey = id.endsWith('_b') ? id.slice(0, -2) : id + '_b';
-        if (newQty + (cart[otherKey]?.qty || 0) > cart[id].stock) { showToast('Max stock reached','warning'); return; }
+        if (newQty > cart[id].stock) { showToast('Max stock reached','warning'); return; }
         cart[id].qty = newQty;
     }
     else { cart[id].qty = newQty; }
@@ -841,15 +910,16 @@ function renderCart() {
         const delta = item.isBox ? item.upb : 1;
         const badge = item.type === 'bulk'
             ? '<span class="badge bg-warning text-dark ms-1" style="font-size:.55rem">BULK</span>'
-            : item.isBox
-            ? `<span class="badge bg-primary ms-1" style="font-size:.55rem">📦×${item.upb}</span>`
+            : '';
+        const boxToggle = (item.upb > 1 && item.unitPrice && item.boxPrice)
+            ? `<button type="button" onclick="toggleBoxMode('${id}')" style="display:inline-block;margin-left:4px;font-size:.6rem;padding:1px 5px;border-radius:3px;cursor:pointer;border:1px solid #0d6efd;background:${item.isBox?'#0d6efd':'#e7f1ff'};color:${item.isBox?'#fff':'#0d6efd'}" title="Toggle Box / Piece">${item.isBox?'📦 Box':'🔹 Pcs'}</button>`
             : '';
         const iCur        = cartCur[id] || 'usd';
         const iCurLabel   = iCur === 'lbp' ? 'LL' : '$';
         const iCurStep    = iCur === 'lbp' ? '500' : '0.01';
         const iCurDisplay = iCur === 'lbp' ? Math.round(item.price * EXCHANGE_RATE) : item.price.toFixed(2);
         html += `<tr>
-            <td class="small">${item.name}${badge}</td>
+            <td class="small">${item.name}${badge}${boxToggle}</td>
             <td style="width:88px">
                 <div class="input-group input-group-sm">
                     <button class="btn btn-outline-secondary btn-sm px-1 py-0" onclick="changeQty('${id}',${-delta})">-</button>
@@ -880,9 +950,7 @@ function setQty(id, val) {
     val = parseFloat(val);
     if (!val || val <= 0) { delete cart[id]; renderCart(); return; }
     if (cart[id].type === 'regular') {
-        const otherKey = id.endsWith('_b') ? id.slice(0, -2) : id + '_b';
-        const maxAllowed = cart[id].stock - (cart[otherKey]?.qty || 0);
-        if (val > maxAllowed) { val = Math.max(0, maxAllowed); showToast('Max stock reached','warning'); }
+        if (val > cart[id].stock) { val = cart[id].stock; showToast('Max stock reached','warning'); }
     }
     cart[id].qty = parseFloat(val.toFixed(3));
     renderCart();
@@ -957,6 +1025,7 @@ function updateTotals(subtotal) {
     document.getElementById('total-usd').textContent    = formatUSD(total);
     document.getElementById('total-lbp').textContent    = formatLBP(total * EXCHANGE_RATE);
     syncDisplay();
+    syncVFD(total);
 }
 
 // ─── Checkout Modal ───────────────────────────────────────────────────────────
@@ -1114,6 +1183,16 @@ function confirmCheckout() {
         const totalDue = parseFloat(document.getElementById('modal-total-usd').textContent.replace('$','').replace(/,/g,'')) || 0;
         paidUSD = totalDue + debtUSD;
         document.getElementById('modal-paid-usd').value = paidUSD.toFixed(2);
+    }
+    // Block underpayment for cash sales
+    if (modalMethod === 'cash') {
+        const totalDue3 = parseFloat(document.getElementById('modal-total-usd').textContent.replace('$','').replace(/,/g,'')) || 0;
+        const totalReq3 = totalDue3 + debtUSD;
+        const given3    = paidUSD + (paidLBP / EXCHANGE_RATE);
+        if (given3 < totalReq3 - 0.005) {
+            showToast('Amount given ($' + given3.toFixed(2) + ') is less than total due ($' + totalReq3.toFixed(2) + ')', 'danger');
+            return;
+        }
     }
     document.getElementById('hd-paid-usd').value   = paidUSD;
     document.getElementById('hd-paid-lbp').value   = paidLBP;
@@ -1350,6 +1429,116 @@ function discardHeld(holdId) {
 
 renderCart();
 updateHeldBadge();
+
+// ── New Customer from POS ─────────────────────────────────────────────────────
+function openNewCustModal() {
+    document.getElementById('nc-name').value    = '';
+    document.getElementById('nc-phone').value   = '';
+    document.getElementById('nc-balance').value = '0';
+    document.getElementById('nc-error').textContent = '';
+    new bootstrap.Modal(document.getElementById('newCustPosModal')).show();
+    setTimeout(() => document.getElementById('nc-name').focus(), 300);
+}
+
+function saveNewCustPos() {
+    const name    = document.getElementById('nc-name').value.trim();
+    const phone   = document.getElementById('nc-phone').value.trim();
+    const balance = parseFloat(document.getElementById('nc-balance').value) || 0;
+    const errEl   = document.getElementById('nc-error');
+    if (!name) { errEl.textContent = 'Name is required.'; return; }
+    errEl.textContent = '';
+    fetch('/dahdouh/pages/api.php?action=create_customer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `name=${encodeURIComponent(name)}&phone=${encodeURIComponent(phone)}&balance=${balance}`
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (!d.ok) { errEl.textContent = d.error || 'Error saving customer.'; return; }
+        bootstrap.Modal.getInstance(document.getElementById('newCustPosModal'))?.hide();
+        selectCustomer({ id: d.id, name, phone, balance: balance.toFixed(2) });
+        showToast('Customer "' + name + '" created and selected', 'success');
+    })
+    .catch(() => { errEl.textContent = 'Network error.'; });
+}
+</script>
+
+<!-- ── Floating Virtual Numpad ────────────────────────────────────────────── -->
+<div id="vnum-overlay" onclick="closeNumpad()" style="display:none;position:fixed;inset:0;z-index:2040;background:transparent"></div>
+<div id="vnum-pad" style="display:none;position:fixed;z-index:2050;background:#1e293b;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.45);padding:10px;width:200px;touch-action:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div id="vnum-display" style="flex:1;color:#fff;font-size:1.15rem;font-weight:700;font-family:monospace;text-align:right;padding:4px 8px;background:#0f172a;border-radius:8px;min-height:32px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">0</div>
+        <button onclick="closeNumpad()" style="background:none;border:none;color:#94a3b8;font-size:1.2rem;padding:2px 6px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div id="vnum-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px">
+        <?php foreach (['7','8','9','4','5','6','1','2','3','.','0','⌫'] as $k): ?>
+        <button onclick="vnumKey('<?= $k ?>')" style="background:#334155;color:#fff;border:none;border-radius:9px;font-size:1.1rem;font-weight:600;padding:11px 0;cursor:pointer;transition:background .1s;user-select:none" ontouchstart="this.style.background='#0d6efd'" ontouchend="this.style.background='#334155'"><?= $k ?></button>
+        <?php endforeach; ?>
+    </div>
+    <button onclick="vnumApply()" style="margin-top:6px;width:100%;background:#0d6efd;color:#fff;border:none;border-radius:9px;font-size:1rem;font-weight:700;padding:10px;cursor:pointer">✓ Apply</button>
+</div>
+
+<script>
+let vnumTarget = null;
+let vnumVal    = '';
+
+function openNumpad(inp) {
+    vnumTarget = inp;
+    vnumVal    = inp.value || '';
+    document.getElementById('vnum-display').textContent = vnumVal || '0';
+    const pad = document.getElementById('vnum-pad');
+    const rect = inp.getBoundingClientRect();
+    const winH = window.innerHeight;
+    const padH = 280;
+    let top = rect.bottom + 6;
+    if (top + padH > winH - 10) top = Math.max(10, rect.top - padH - 6);
+    let left = rect.left;
+    if (left + 200 > window.innerWidth - 10) left = window.innerWidth - 210;
+    pad.style.top  = top + 'px';
+    pad.style.left = left + 'px';
+    pad.style.display = '';
+    document.getElementById('vnum-overlay').style.display = '';
+}
+
+function closeNumpad() {
+    document.getElementById('vnum-pad').style.display = 'none';
+    document.getElementById('vnum-overlay').style.display = 'none';
+    vnumTarget = null;
+    vnumVal    = '';
+}
+
+function vnumKey(k) {
+    if (k === '⌫') {
+        vnumVal = vnumVal.slice(0, -1);
+    } else if (k === '.') {
+        if (!vnumVal.includes('.')) vnumVal += '.';
+    } else {
+        if (vnumVal === '0') vnumVal = k;
+        else vnumVal += k;
+    }
+    document.getElementById('vnum-display').textContent = vnumVal || '0';
+}
+
+function vnumApply() {
+    if (vnumTarget && vnumVal !== '') {
+        vnumTarget.value = vnumVal;
+        vnumTarget.dispatchEvent(new Event('input', { bubbles: true }));
+        vnumTarget.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    closeNumpad();
+}
+
+// Attach numpad to checkout modal amount inputs when the modal opens
+document.addEventListener('shown.bs.modal', function(e) {
+    if (e.target.id !== 'checkoutModal') return;
+    ['modal-paid-usd','modal-paid-lbp','modal-debt-input'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !el._vnumBound) {
+            el._vnumBound = true;
+            el.addEventListener('focus', function() { openNumpad(this); });
+        }
+    });
+});
 </script>
 
 <?php renderFoot(); ?>

@@ -23,12 +23,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    $fields = ['store_name','store_address','store_phone','exchange_rate','base_currency','auto_print_receipt','theme_brand_color','theme_accent_color','update_manifest_url'];
+    $fields = ['store_name','store_address','store_phone','exchange_rate','base_currency','auto_print_receipt','theme_brand_color','theme_accent_color','update_manifest_url','vfd_com_port'];
     foreach ($fields as $f) {
         if (isset($_POST[$f])) saveSetting($pdo, $f, trim($_POST[$f]));
     }
     // Boolean toggles — unchecked checkboxes send nothing, so always save explicitly
-    foreach (['customer_display_enabled','cash_drawer_enabled'] as $b) {
+    foreach (['customer_display_enabled','cash_drawer_enabled','vfd_enabled'] as $b) {
         saveSetting($pdo, $b, isset($_POST[$b]) ? '1' : '0');
     }
     if (!$message) $message = 'success:Settings saved.';
@@ -120,12 +120,25 @@ alertBox($message);
             <div class="text-muted small">When ON, the POS page automatically opens a second window showing the running total for the customer. Open that window on your second monitor or TV display.</div>
         </label>
     </div>
-    <div class="form-check form-switch">
+    <div class="form-check form-switch mb-3">
         <input class="form-check-input" type="checkbox" name="cash_drawer_enabled" id="cashDrawer" value="1" <?= setting('cash_drawer_enabled')=='1'?'checked':'' ?>>
         <label class="form-check-label" for="cashDrawer">
             <strong>Cash Drawer</strong>
             <div class="text-muted small">When ON, the cash drawer opens automatically after each sale and an "Open Drawer" button appears in the POS page. Requires a cash drawer connected to your thermal receipt printer via RJ11 cable.</div>
         </label>
+    </div>
+    <div class="form-check form-switch mb-2">
+        <input class="form-check-input" type="checkbox" name="vfd_enabled" id="vfdEnabled" value="1" <?= setting('vfd_enabled')=='1'?'checked':'' ?>>
+        <label class="form-check-label" for="vfdEnabled">
+            <strong>VFD / LED Customer Display (COM Port)</strong>
+            <div class="text-muted small">When ON, the POS sends price updates to a hardware VFD or LED display via a COM port. The display shows item total on every cart change.</div>
+        </label>
+    </div>
+    <div class="ms-4 mb-1">
+        <label class="form-label small mb-1">COM Port</label>
+        <input type="text" name="vfd_com_port" class="form-control form-control-sm" style="max-width:120px"
+               value="<?= htmlspecialchars(setting('vfd_com_port','COM3')) ?>" placeholder="COM3">
+        <div class="form-text">Check Device Manager for the correct port number (e.g. COM3, COM5).</div>
     </div>
 </div>
 
@@ -268,14 +281,40 @@ alertBox($message);
 <div class="card stat-card p-4 mb-4 mt-4">
     <h6 class="fw-bold mb-3 text-muted"><i class="bi bi-shield-lock me-1"></i>SOFTWARE LICENSE</h6>
     <?php
-    $licClient = getLicenseClient() ?: null;
-    if ($licClient) $licClient = htmlspecialchars($licClient);
+    $licInfo   = getLicenseInfo();
+    $licClient = !empty($licInfo['client']) ? htmlspecialchars($licInfo['client']) : null;
+    $licType   = $licInfo['type'] ?? 'lifetime';
+    $expiresAt = (int)($licInfo['expires_at'] ?? 0);
+    $daysLeft  = ($expiresAt > 0) ? (int)ceil(($expiresAt - time()) / 86400) : null;
     ?>
     <?php if ($licClient): ?>
-    <div class="d-flex align-items-center gap-2 mb-2">
-        <span class="badge bg-success fs-6"><i class="bi bi-check-circle me-1"></i>ACTIVATED</span>
+    <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+        <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>ACTIVATED</span>
+        <?php if ($licType === 'lifetime'): ?>
+            <span class="badge bg-primary">LIFETIME</span>
+        <?php elseif ($licType === 'yearly'): ?>
+            <?php if ($daysLeft !== null && $daysLeft <= 0): ?>
+                <span class="badge bg-danger">EXPIRED</span>
+            <?php elseif ($daysLeft !== null && $daysLeft <= 30): ?>
+                <span class="badge bg-warning text-dark">YEARLY — <?= $daysLeft ?> day<?= $daysLeft !== 1 ? 's' : '' ?> left</span>
+            <?php else: ?>
+                <span class="badge bg-info text-dark">YEARLY</span>
+            <?php endif; ?>
+        <?php endif; ?>
         <span class="fw-bold"><?= $licClient ?></span>
     </div>
+    <?php if ($licType === 'yearly' && $expiresAt > 0): ?>
+    <div class="text-muted small mb-2">
+        <strong>Expires:</strong> <?= date('d M Y', $expiresAt) ?>
+        <?php if ($daysLeft !== null && $daysLeft > 0): ?>
+            <span class="<?= $daysLeft <= 30 ? 'text-warning fw-semibold' : 'text-success' ?>">
+                (<?= $daysLeft ?> day<?= $daysLeft !== 1 ? 's' : '' ?> remaining)
+            </span>
+        <?php elseif ($daysLeft !== null && $daysLeft <= 0): ?>
+            <span class="text-danger fw-semibold">(Expired)</span>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
     <div class="text-muted small mb-2">
         <strong>Machine ID:</strong> <code><?= htmlspecialchars(formatMachineId()) ?></code>
     </div>

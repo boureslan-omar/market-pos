@@ -12,9 +12,11 @@ if (isset($_GET['delete'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $expenseId = (int)($_POST['expense_id'] ?? 0);
     $desc = trim($_POST['description'] ?? '');
     $amt  = (float)($_POST['amount'] ?? 0);
     $cat  = trim($_POST['category'] ?? 'General');
+    if (!$cat) $cat = 'General';
     $date = $_POST['expense_date'] ?? date('Y-m-d');
     $note = trim($_POST['note'] ?? '');
 
@@ -33,6 +35,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!$desc || $amt <= 0) {
         $message = 'error:Description and a positive amount are required.';
+    } elseif ($expenseId > 0) {
+        // Edit existing expense — update record only (cash register already logged)
+        $pdo->prepare("UPDATE expenses SET description=?, amount=?, category=?, expense_date=?, note=? WHERE id=?")
+            ->execute([$desc, $amt, $cat, $date, $note, $expenseId]);
+        $message = 'success:Expense updated.';
     } else {
         $pdo->prepare("INSERT INTO expenses (description, amount, category, expense_date, note) VALUES (?,?,?,?,?)")
             ->execute([$desc, $amt, $cat, $date, $note]);
@@ -61,6 +68,11 @@ $totalExp = array_sum(array_column($expenses, 'amount'));
 $byCategory = $pdo->prepare("SELECT category, SUM(amount) as total FROM expenses WHERE expense_date BETWEEN ? AND ? GROUP BY category ORDER BY total DESC");
 $byCategory->execute([$from, $to]);
 $byCategory = $byCategory->fetchAll();
+
+$defaultCats = ['Rent','Utilities','Salaries','Supplies','Maintenance','Transport','Marketing','General'];
+$savedCats   = $pdo->query("SELECT DISTINCT category FROM expenses WHERE category != '' ORDER BY category")->fetchAll(PDO::FETCH_COLUMN);
+$allCats     = array_unique(array_merge($defaultCats, $savedCats));
+sort($allCats);
 
 renderHead('Expenses');
 renderNav('expenses');
@@ -116,7 +128,12 @@ renderNav('expenses');
         <td><span class="badge bg-secondary"><?= htmlspecialchars($e['category']) ?></span></td>
         <td class="fw-bold text-danger"><?= fmt($e['amount']) ?></td>
         <td class="small text-muted"><?= htmlspecialchars($e['note'] ?: '—') ?></td>
-        <td><a href="?delete=<?= $e['id'] ?>&from=<?= $from ?>&to=<?= $to ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete?')"><i class="bi bi-trash"></i></a></td>
+        <td>
+            <button class="btn btn-sm btn-outline-warning me-1"
+                onclick="editExpense(<?= $e['id'] ?>,<?= htmlspecialchars(json_encode($e['description']),ENT_QUOTES) ?>,<?= $e['amount'] ?>,<?= htmlspecialchars(json_encode($e['category']),ENT_QUOTES) ?>,'<?= $e['expense_date'] ?>',<?= htmlspecialchars(json_encode($e['note']),ENT_QUOTES) ?>)"
+                title="Edit"><i class="bi bi-pencil"></i></button>
+            <a href="?delete=<?= $e['id'] ?>&from=<?= $from ?>&to=<?= $to ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete?')" title="Delete"><i class="bi bi-trash"></i></a>
+        </td>
     </tr>
     <?php endforeach; ?>
     <?php if (!$expenses): ?><tr><td colspan="6" class="text-center text-muted py-4">No expenses in this period.</td></tr><?php endif; ?>
@@ -131,9 +148,13 @@ renderNav('expenses');
 <div class="modal-dialog">
 <div class="modal-content">
 <form method="POST">
-    <div class="modal-header"><h5 class="modal-title">Add Expense</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <input type="hidden" name="expense_id" id="exp-id-hidden" value="0">
+    <div class="modal-header">
+        <h5 class="modal-title" id="exp-modal-title">Add Expense</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
     <div class="modal-body">
-        <div class="mb-3"><label class="form-label">Description *</label><input type="text" name="description" class="form-control" required></div>
+        <div class="mb-3"><label class="form-label">Description *</label><input type="text" name="description" id="exp-desc" class="form-control" required></div>
         <div class="row g-2 mb-3">
             <div class="col-6">
                 <label class="form-label">Amount <span id="exp-currency-label" class="text-muted">(USD)</span> *</label>
@@ -141,16 +162,15 @@ renderNav('expenses');
                 <div id="exp-usd-equiv" class="form-text text-muted" style="display:none"></div>
             </div>
             <div class="col-6"><label class="form-label">Category</label>
-                <select name="category" class="form-select">
-                    <?php foreach (['Rent','Utilities','Salaries','Supplies','Maintenance','Transport','Marketing','General'] as $cat): ?>
-                    <option><?= $cat ?></option>
-                    <?php endforeach; ?>
-                </select>
+                <input name="category" id="exp-cat" class="form-control" list="exp-cat-list" placeholder="General" autocomplete="off">
+                <datalist id="exp-cat-list">
+                    <?php foreach ($allCats as $cat): ?><option value="<?= htmlspecialchars($cat) ?>"><?php endforeach; ?>
+                </datalist>
             </div>
         </div>
-        <div class="mb-3"><label class="form-label">Date</label><input type="date" name="expense_date" class="form-control" value="<?= date('Y-m-d') ?>"></div>
-        <div class="mb-3"><label class="form-label">Note</label><textarea name="note" class="form-control" rows="2"></textarea></div>
-        <div class="border rounded p-2 bg-light">
+        <div class="mb-3"><label class="form-label">Date</label><input type="date" name="expense_date" id="exp-date" class="form-control" value="<?= date('Y-m-d') ?>"></div>
+        <div class="mb-3"><label class="form-label">Note</label><textarea name="note" id="exp-note" class="form-control" rows="2"></textarea></div>
+        <div id="exp-cash-section" class="border rounded p-2 bg-light">
             <div class="form-check mb-1">
                 <input class="form-check-input" type="checkbox" name="cash_deduct" value="1" id="ck-cash-exp" checked>
                 <label class="form-check-label" for="ck-cash-exp">Deduct from cash register</label>
@@ -187,11 +207,27 @@ renderNav('expenses');
             }
         }
         document.getElementById('exp-amount').addEventListener('input', updateExpEquiv);
+        function editExpense(id, desc, amt, cat, date, note) {
+            document.getElementById('exp-id-hidden').value = id;
+            document.getElementById('exp-modal-title').textContent = 'Edit Expense';
+            document.getElementById('exp-desc').value  = desc;
+            document.getElementById('exp-amount').value = parseFloat(amt).toFixed(2);
+            document.getElementById('exp-cat').value   = cat;
+            document.getElementById('exp-date').value  = date;
+            document.getElementById('exp-note').value  = note || '';
+            document.getElementById('exp-cash-section').style.display = 'none';
+            new bootstrap.Modal(document.getElementById('expModal')).show();
+        }
+        document.getElementById('expModal').addEventListener('hidden.bs.modal', function () {
+            document.getElementById('exp-id-hidden').value = '0';
+            document.getElementById('exp-modal-title').textContent = 'Add Expense';
+            document.getElementById('exp-cash-section').style.display = '';
+        });
         </script>
     </div>
     <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="submit" class="btn btn-danger">Save Expense</button>
+        <button type="submit" class="btn btn-danger" id="exp-save-btn">Save Expense</button>
     </div>
 </form>
 </div></div></div>

@@ -284,15 +284,24 @@ alertBox($message);
     </button>
 </div>
 
+<div class="mb-3">
+    <div class="input-group" style="max-width:420px">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input type="text" id="purch-search" class="form-control" placeholder="Search supplier or date…" oninput="filterPurchases()">
+        <input type="date" id="purch-date-filter" class="form-control" style="max-width:160px" onchange="filterPurchases()">
+        <button class="btn btn-outline-secondary" onclick="document.getElementById('purch-search').value='';document.getElementById('purch-date-filter').value='';filterPurchases()">✕</button>
+    </div>
+</div>
+
 <div class="card stat-card">
 <div class="table-responsive">
 <table class="table table-hover align-middle mb-0">
     <thead class="table-dark"><tr>
         <th>Date</th><th>Reference</th><th>Supplier</th><th>Items</th><th>Total</th><th>Note</th><th>Actions</th>
     </tr></thead>
-    <tbody>
+    <tbody id="purch-list-body">
     <?php foreach ($purchases as $p): ?>
-    <tr>
+    <tr data-supplier="<?= strtolower(htmlspecialchars($p['supplier_name'] ?? '')) ?>" data-date="<?= $p['purchase_date'] ?>">
         <td><?= htmlspecialchars($p['purchase_date']) ?></td>
         <td><?= htmlspecialchars($p['reference'] ?: '—') ?></td>
         <td><?= htmlspecialchars($p['supplier_name'] ?? '—') ?></td>
@@ -326,10 +335,13 @@ alertBox($message);
         <div class="row g-3 mb-3">
             <div class="col-md-3">
                 <label class="form-label">Supplier <span class="text-danger">*</span></label>
-                <select name="supplier_id" class="form-select" required>
-                    <option value="">— Select Supplier —</option>
-                    <?php foreach ($suppliers as $s): ?><option value="<?= $s['id'] ?>"><?= htmlspecialchars($s['name']) ?></option><?php endforeach; ?>
-                </select>
+                <div class="input-group">
+                    <select name="supplier_id" id="purch-supplier-sel" class="form-select" required>
+                        <option value="">— Select Supplier —</option>
+                        <?php foreach ($suppliers as $s): ?><option value="<?= $s['id'] ?>"><?= htmlspecialchars($s['name']) ?></option><?php endforeach; ?>
+                    </select>
+                    <button type="button" class="btn btn-outline-success" onclick="openNewSupplierModal()" title="Add new supplier"><i class="bi bi-plus-lg"></i></button>
+                </div>
             </div>
             <div class="col-md-3"><label class="form-label">Reference / Invoice #</label><input type="text" name="reference" class="form-control" placeholder="Optional"></div>
             <div class="col-md-3"><label class="form-label">Date</label><input type="date" name="purchase_date" class="form-control" value="<?= date('Y-m-d') ?>"></div>
@@ -1293,6 +1305,72 @@ function applyPurchDrawer() {
     if (sel && sel.value === 'cash_register' && _purchDrawerCur === 'lbp') sel.value = 'cash_register_lbp';
 }
 togglePurchDrawer();
+
+// ─── Purchases search / filter ────────────────────────────────────────────────
+function filterPurchases() {
+    const q    = (document.getElementById('purch-search')?.value || '').toLowerCase().trim();
+    const date = (document.getElementById('purch-date-filter')?.value || '').trim();
+    document.querySelectorAll('#purch-list-body tr').forEach(tr => {
+        const supplier = tr.dataset.supplier || '';
+        const trDate   = tr.dataset.date || '';
+        const matchQ   = !q    || supplier.includes(q) || trDate.includes(q);
+        const matchD   = !date || trDate === date;
+        tr.style.display = (matchQ && matchD) ? '' : 'none';
+    });
+}
+
+// ─── New Supplier quick-create ────────────────────────────────────────────────
+function openNewSupplierModal() {
+    document.getElementById('ns-name').value  = '';
+    document.getElementById('ns-phone').value = '';
+    new bootstrap.Modal(document.getElementById('newSupplierModal')).show();
+    setTimeout(() => document.getElementById('ns-name').focus(), 300);
+}
+function saveNewSupplier() {
+    const name  = document.getElementById('ns-name').value.trim();
+    const phone = document.getElementById('ns-phone').value.trim();
+    if (!name) { alert('Supplier name is required.'); return; }
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('phone', phone);
+    fetch('/dahdouh/pages/api.php?action=create_supplier', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+            if (d.error) { alert(d.error); return; }
+            const sel = document.getElementById('purch-supplier-sel');
+            const opt = document.createElement('option');
+            opt.value       = d.id;
+            opt.textContent = name;
+            opt.selected    = true;
+            sel.appendChild(opt);
+            bootstrap.Modal.getInstance(document.getElementById('newSupplierModal')).hide();
+        })
+        .catch(() => alert('Failed to create supplier'));
+}
 </script>
+
+<!-- ── New Supplier Modal ──────────────────────────────────────────────────── -->
+<div class="modal fade" id="newSupplierModal" tabindex="-1">
+<div class="modal-dialog modal-sm">
+<div class="modal-content">
+    <div class="modal-header py-2">
+        <h6 class="modal-title"><i class="bi bi-truck me-2"></i>New Supplier</h6>
+        <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+        <div class="mb-3">
+            <label class="form-label small">Name <span class="text-danger">*</span></label>
+            <input type="text" id="ns-name" class="form-control form-control-sm" placeholder="Supplier name">
+        </div>
+        <div class="mb-2">
+            <label class="form-label small">Phone</label>
+            <input type="text" id="ns-phone" class="form-control form-control-sm" placeholder="Optional">
+        </div>
+    </div>
+    <div class="modal-footer py-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success btn-sm" onclick="saveNewSupplier()">Save</button>
+    </div>
+</div></div></div>
 
 <?php renderFoot(); ?>

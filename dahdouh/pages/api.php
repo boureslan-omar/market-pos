@@ -6,12 +6,53 @@ if (!isLoggedIn()) { echo json_encode(['error'=>'Not authenticated']); exit; }
 
 $action = $_GET['action'] ?? '';
 
+// ─── VFD / LED display via COM port ──────────────────────────────────────────
+if ($action === 'vfd_display') {
+    if (!VFD_ENABLED) { echo json_encode(['skip' => 'VFD disabled']); exit; }
+    $total = (float)($_POST['total'] ?? 0);
+    $line1 = substr(trim($_POST['line1'] ?? ''), 0, 20);
+    $line2 = 'Total: $' . number_format($total, 2);
+    $port  = VFD_COM_PORT;
+    $fp = @fopen($port . ':', 'w');
+    if ($fp) {
+        fwrite($fp, "\x0C");        // Form feed — clears most VFD displays
+        fwrite($fp, str_pad($line1, 20) . "\n");
+        fwrite($fp, str_pad($line2, 20));
+        fclose($fp);
+        echo json_encode(['ok' => true]);
+    } else {
+        echo json_encode(['error' => 'Cannot open ' . $port]);
+    }
+    exit;
+}
+
+// ─── Trigger background auto-update check ────────────────────────────────────
+if ($action === 'trigger_update') {
+    requireRole('admin');
+    $manifestUrl = setting('update_manifest_url', '');
+    if (!$manifestUrl) { echo json_encode(['skip' => 'no manifest URL']); exit; }
+    $script  = realpath(__DIR__ . '/../auto_update.php');
+    $logFile = realpath(__DIR__ . '/../') . DIRECTORY_SEPARATOR . 'auto_update.log';
+    $php     = 'C:\\xampp\\php\\php.exe';
+    if (!file_exists($php)) $php = PHP_BINARY;
+    // Launch detached so the request returns immediately
+    $cmd = "\"$php\" \"$script\" >> \"$logFile\" 2>&1";
+    if (PHP_OS_FAMILY === 'Windows') {
+        pclose(popen("start /B $cmd", "r"));
+    } else {
+        exec("$cmd &");
+    }
+    echo json_encode(['ok' => true]);
+    exit;
+}
+
 // ─── Search product (barcode or name) ─────────────────────────────────────────
 if ($action === 'search_product') {
     $q = trim($_GET['q'] ?? '');
     $stmt = $pdo->prepare("
-        SELECT id, name, sell_price, cost_price, stock, barcode, product_type,
-               product_source, consignment_cost, consignment_supplier_id
+        SELECT id, name, sell_price, sell_price_box, cost_price, stock, barcode,
+               product_type, product_source, consignment_cost, consignment_supplier_id,
+               units_per_box
         FROM products
         WHERE barcode = ? OR name LIKE ?
         ORDER BY (barcode = ?) DESC
@@ -58,6 +99,41 @@ if ($action === 'set_setting') {
     } else {
         echo json_encode(['error' => 'Not allowed']);
     }
+    exit;
+}
+
+// ─── Create supplier (quick-add from purchases) ───────────────────────────────
+if ($action === 'create_supplier') {
+    requireRole('admin','stock');
+    $name  = trim($_POST['name'] ?? '');
+    $phone = trim($_POST['phone'] ?? '');
+    if (!$name) { echo json_encode(['error' => 'Name required']); exit; }
+    $dup = $pdo->prepare("SELECT id FROM suppliers WHERE name=?");
+    $dup->execute([$name]);
+    if ($dup->fetch()) { echo json_encode(['error' => 'A supplier with that name already exists']); exit; }
+    $pdo->prepare("INSERT INTO suppliers (name, phone) VALUES (?,?)")->execute([$name, $phone]);
+    echo json_encode(['ok' => true, 'id' => (int)$pdo->lastInsertId()]);
+    exit;
+}
+
+// ─── Create customer (quick-add from POS) ────────────────────────────────────
+if ($action === 'create_customer') {
+    requireRole('admin','cashier');
+    $name    = trim($_POST['name'] ?? '');
+    $phone   = trim($_POST['phone'] ?? '');
+    $balance = (float)($_POST['balance'] ?? 0);
+    if (!$name) { echo json_encode(['error' => 'Name required']); exit; }
+    $dup = $pdo->prepare("SELECT id FROM customers WHERE name=?");
+    $dup->execute([$name]);
+    if ($dup->fetch()) { echo json_encode(['error' => 'A customer with that name already exists']); exit; }
+    $pdo->prepare("INSERT INTO customers (name, phone, balance) VALUES (?,?,?)")->execute([$name, $phone, $balance]);
+    $id = (int)$pdo->lastInsertId();
+    if ($balance != 0) {
+        $type = $balance > 0 ? 'credit' : 'payment';
+        $pdo->prepare("INSERT INTO customer_ledger (customer_id, sale_id, type, amount, note) VALUES (?,NULL,?,?,?)")
+            ->execute([$id, $type, abs($balance), 'Opening balance']);
+    }
+    echo json_encode(['ok' => true, 'id' => $id]);
     exit;
 }
 
