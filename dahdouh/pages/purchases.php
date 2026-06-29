@@ -284,13 +284,18 @@ alertBox($message);
     </button>
 </div>
 
-<div class="mb-3">
-    <div class="input-group" style="max-width:420px">
+<div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
+    <div class="input-group" style="max-width:280px">
         <span class="input-group-text"><i class="bi bi-search"></i></span>
-        <input type="text" id="purch-search" class="form-control" placeholder="Search supplier or date…" oninput="filterPurchases()">
-        <input type="date" id="purch-date-filter" class="form-control" style="max-width:160px" onchange="filterPurchases()">
-        <button class="btn btn-outline-secondary" onclick="document.getElementById('purch-search').value='';document.getElementById('purch-date-filter').value='';filterPurchases()">✕</button>
+        <input type="text" id="purch-search" class="form-control" placeholder="Search supplier…" oninput="filterPurchases()">
     </div>
+    <div class="input-group" style="max-width:340px">
+        <span class="input-group-text small">From</span>
+        <input type="date" id="purch-date-from" class="form-control" onchange="filterPurchases()">
+        <span class="input-group-text small">To</span>
+        <input type="date" id="purch-date-to" class="form-control" onchange="filterPurchases()">
+    </div>
+    <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('purch-search').value='';document.getElementById('purch-date-from').value='';document.getElementById('purch-date-to').value='';filterPurchases()">✕ Clear</button>
 </div>
 
 <div class="card stat-card">
@@ -1309,12 +1314,13 @@ togglePurchDrawer();
 // ─── Purchases search / filter ────────────────────────────────────────────────
 function filterPurchases() {
     const q    = (document.getElementById('purch-search')?.value || '').toLowerCase().trim();
-    const date = (document.getElementById('purch-date-filter')?.value || '').trim();
+    const from = (document.getElementById('purch-date-from')?.value || '').trim();
+    const to   = (document.getElementById('purch-date-to')?.value || '').trim();
     document.querySelectorAll('#purch-list-body tr').forEach(tr => {
         const supplier = tr.dataset.supplier || '';
         const trDate   = tr.dataset.date || '';
-        const matchQ   = !q    || supplier.includes(q) || trDate.includes(q);
-        const matchD   = !date || trDate === date;
+        const matchQ   = !q    || supplier.includes(q);
+        const matchD   = (!from || trDate >= from) && (!to || trDate <= to);
         tr.style.display = (matchQ && matchD) ? '' : 'none';
     });
 }
