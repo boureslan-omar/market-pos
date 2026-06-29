@@ -620,11 +620,7 @@ function printPosReceipt() {
         <input type="hidden" id="bulk-name">
         <div class="mb-2">
             <label class="form-label small">Price / Amount (USD)</label>
-            <input type="number" id="bulk-price" class="form-control" step="0.01" min="0.01" autofocus>
-        </div>
-        <div class="mb-2">
-            <label class="form-label small">Quantity</label>
-            <input type="number" id="bulk-qty" class="form-control" step="0.001" min="0.001" value="1" placeholder="e.g. 1.5 kg">
+            <input type="number" id="bulk-price" class="form-control form-control-lg" step="0.01" min="0.01" autofocus>
         </div>
     </div>
     <div class="modal-footer py-2">
@@ -890,9 +886,8 @@ function confirmBulkAdd() {
     const id    = document.getElementById('bulk-id').value;
     const name  = document.getElementById('bulk-name').value;
     const price = parseFloat(document.getElementById('bulk-price').value);
-    const qty   = parseFloat(document.getElementById('bulk-qty').value) || 1;
     if (!price || price <= 0) { showToast('Enter a valid price','warning'); return; }
-    addToCart(id, name, price, 0, 999, 'bulk', qty);
+    addToCart(id, name, price, 0, 999, 'bulk', 1);
     bootstrap.Modal.getInstance(document.getElementById('bulkModal')).hide();
     barcodeInput?.focus();
 }
