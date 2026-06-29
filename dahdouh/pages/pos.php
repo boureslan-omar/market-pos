@@ -355,8 +355,8 @@ function printPosReceipt() {
             <?php endif; ?>
             <div class="prod-name"><?= htmlspecialchars($p['name']) ?></div>
             <?php $hasBox = ($p['sell_price_box'] ?? 0) > 0 && ($p['units_per_box'] ?? 1) > 1; ?>
-            <div class="prod-price"><?php if ($hasBox): ?><?= fmtUSD($p['sell_price_box']) ?><span style="font-size:.65rem;font-weight:400;opacity:.65"> /box</span><?php else: ?><?= fmtUSD($p['sell_price']) ?><?php endif; ?></div>
-            <div class="prod-lbp"><?php if ($hasBox): ?><?= fmtUSD($p['sell_price']) ?> /pcs<?php else: ?><?= fmtLBP($p['sell_price'] * $rate) ?><?php endif; ?></div>
+            <div class="prod-price"><?= fmtUSD($p['sell_price']) ?><?php if ($hasBox): ?><span style="font-size:.65rem;font-weight:400;opacity:.65"> /pcs</span><?php endif; ?></div>
+            <div class="prod-lbp"><?php if ($hasBox): ?><?= fmtUSD($p['sell_price_box']) ?>/box<?php else: ?><?= fmtLBP($p['sell_price'] * $rate) ?><?php endif; ?></div>
             <?php if ($isBulk): ?>
                 <div class="prod-stock" style="color:#6c757d">tap to enter price</div>
             <?php elseif ($outStock): ?>
@@ -753,10 +753,32 @@ function tileClick(el) {
     } else if (isOut) {
         showToast('Out of stock', 'danger');
     } else if (upb > 1 && boxPrice > 0) {
-        addBoxToCartFlash(el, id, name, boxPrice, price, cost, stock, upb);
+        addPcsToCartFlash(el, id, name, boxPrice, price, cost, stock, upb);
     } else {
         addToCartFlash(el, id, name, price, cost, stock, 'regular');
     }
+}
+
+function addPcsToCartFlash(el, id, name, boxPrice, unitPrice, cost, stock, upb) {
+    el.classList.add('prod-flash');
+    setTimeout(() => el.classList.remove('prod-flash'), 300);
+    addPcsToCart(id, name, boxPrice, unitPrice, cost, stock, upb);
+}
+
+function addPcsToCart(id, name, boxPrice, unitPrice, cost, stock, upb) {
+    id = String(id);
+    if (cart[id]) {
+        if (cart[id].qty >= stock) { showToast('No more stock', 'warning'); return; }
+        cart[id].qty = parseFloat((cart[id].qty + 1).toFixed(3));
+        // Ensure box fields are always stored so the toggle appears
+        cart[id].boxPrice  = boxPrice;
+        cart[id].unitPrice = unitPrice;
+        cart[id].upb       = upb;
+        if (!cart[id].isBox) cart[id].price = unitPrice;
+    } else {
+        cart[id] = { name, price: unitPrice, boxPrice, unitPrice, cost: parseFloat(cost), qty: 1, stock: parseFloat(stock)||999, type: 'regular', isBox: false, upb };
+    }
+    renderCart();
 }
 
 function addBoxToCartFlash(el, id, name, boxPrice, unitPrice, cost, stock, upb) {
@@ -822,7 +844,7 @@ function triggerSearch() {
                 new bootstrap.Modal(document.getElementById('bulkModal')).show();
                 setTimeout(() => document.getElementById('bulk-price').focus(), 300);
             } else if (parseInt(d.units_per_box) > 1 && parseFloat(d.sell_price_box) > 0) {
-                addBoxToCart(d.id, d.name, parseFloat(d.sell_price_box), parseFloat(d.sell_price), d.cost_price, d.stock, parseInt(d.units_per_box));
+                addPcsToCart(d.id, d.name, parseFloat(d.sell_price_box), parseFloat(d.sell_price), d.cost_price, d.stock, parseInt(d.units_per_box));
             } else {
                 addToCart(d.id, d.name, d.sell_price, d.cost_price, d.stock, 'regular');
             }
