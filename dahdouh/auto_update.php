@@ -31,12 +31,9 @@ if (file_exists($versionFile)) {
     if ($decoded) $local = $decoded;
 }
 
-// ── 2. Get manifest URL from settings ────────────────────────────────────────
-$manifestUrl = setting('update_manifest_url', '');
-if (!$manifestUrl) {
-    log_msg('SKIP — No update manifest URL configured in Settings.');
-    exit(0);
-}
+// ── 2. Get manifest URL (settings DB first, hardcoded fallback) ──────────────
+const DEFAULT_MANIFEST_URL = 'https://raw.githubusercontent.com/boureslan-omar/market-pos/main/dahdouh/manifest.json';
+$manifestUrl = setting('update_manifest_url', '') ?: DEFAULT_MANIFEST_URL;
 
 // ── 3. Fetch manifest (short timeout — skip silently if offline) ──────────────
 $ctx = stream_context_create(['http' => ['timeout' => 5, 'ignore_errors' => true]]);
