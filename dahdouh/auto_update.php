@@ -96,24 +96,40 @@ if (class_exists('ZipArchive')) {
         exit(1);
     }
 
+    // Detect common top-level prefix (PowerShell zip may use backslashes — normalise first)
+    $prefix = '';
     for ($i = 0; $i < $zip->numFiles; $i++) {
-        $entry = $zip->getNameIndex($i);
-        $rel   = preg_replace('#^[^/]+/#', '', $entry);
-        if ($rel === '' || $rel === false) continue;
+        $name = str_replace('\\', '/', $zip->getNameIndex($i));
+        $slash = strpos($name, '/');
+        if ($slash !== false && $slash > 0) {
+            $cand = substr($name, 0, $slash + 1);
+            if ($prefix === '') { $prefix = $cand; }
+            elseif ($prefix !== $cand) { $prefix = ''; break; }
+        }
+    }
+    log_msg('Zip prefix detected: "' . $prefix . '"');
 
-        $relNorm = str_replace('\\', '/', $rel);
-        if (in_array($relNorm, PROTECTED_FILES)) { $skipped++; continue; }
+    for ($i = 0; $i < $zip->numFiles; $i++) {
+        // Normalise backslashes → forward slashes (PowerShell zip quirk)
+        $entry = str_replace('\\', '/', $zip->getNameIndex($i));
+
+        // Strip common top-level prefix
+        if ($prefix !== '' && strncmp($entry, $prefix, strlen($prefix)) === 0) {
+            $rel = substr($entry, strlen($prefix));
+        } else {
+            $rel = $entry;
+        }
+
+        if ($rel === '' || $rel === false) continue;
+        if (substr($rel, -1) === '/') continue; // skip directory entries
+
+        if (in_array($rel, PROTECTED_FILES)) { $skipped++; continue; }
 
         $target = $dest . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $rel);
-
-        if (substr($entry, -1) === '/') {
-            if (!is_dir($target)) mkdir($target, 0755, true);
-        } else {
-            $dir = dirname($target);
-            if (!is_dir($dir)) mkdir($dir, 0755, true);
-            file_put_contents($target, $zip->getFromIndex($i));
-            $extracted++;
-        }
+        $dir    = dirname($target);
+        if (!is_dir($dir)) mkdir($dir, 0755, true);
+        file_put_contents($target, $zip->getFromIndex($i));
+        $extracted++;
     }
     $zip->close();
     @unlink($tmpZip);
