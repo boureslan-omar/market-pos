@@ -306,7 +306,7 @@ body { display:flex; flex-direction:column; }
 #pos-left > .pos-grid-wrap { flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; }
 #product-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:.5rem; align-content:start; padding-bottom:.5rem; }
 /* Right panel */
-#pos-right { display:flex; flex-direction:column; flex:0 0 380px; min-height:0; overflow:hidden; }
+#pos-right { display:flex; flex-direction:column; flex:0 0 430px; min-height:0; overflow:hidden; }
 #pos-right .pos-card { display:flex; flex-direction:column; flex:1; min-height:0; background:#fff; border-radius:.375rem; box-shadow:0 .125rem .25rem rgba(0,0,0,.075); }
 #pos-right .pos-card-body { display:flex; flex-direction:column; flex:1; min-height:0; padding:.5rem; }
 #cart-scroll { flex:1; min-height:0; overflow-y:auto; }
