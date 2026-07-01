@@ -295,15 +295,21 @@ function printPosReceipt() {
 
 <?php else: ?>
 <!-- ═══════════ POS INTERFACE ═══════════ -->
+<style>
+/* POS-only: make body a flex column so the container fills whatever
+   space remains below the navbar — no hardcoded navbar height needed */
+html { height: 100%; overflow: hidden; }
+body { height: 100%; overflow: hidden; display: flex; flex-direction: column; margin: 0; }
+</style>
 
-<div class="container-fluid py-2">
-<div class="row g-2" style="height:calc(100vh - 70px)">
+<div class="container-fluid" style="padding:.5rem .75rem;flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column">
+<div class="row g-2" style="flex:1;min-height:0">
 
 <!-- ── Left: barcode + product grid ── -->
-<div class="col-lg-8 d-flex flex-column" style="overflow-y:auto">
+<div class="col-lg-8 d-flex flex-column" style="min-height:0;overflow:hidden">
 
     <!-- Barcode strip -->
-    <div class="input-group mb-2">
+    <div class="input-group mb-2" style="flex-shrink:0">
         <span class="input-group-text bg-dark text-white"><i class="bi bi-upc-scan"></i></span>
         <input type="text" id="barcode-input" class="form-control form-control-lg"
                placeholder="Scan barcode or type product name — press Enter"
@@ -315,7 +321,7 @@ function printPosReceipt() {
     </div>
 
     <!-- Category tabs -->
-    <div class="d-flex gap-1 flex-wrap mb-2">
+    <div class="d-flex gap-1 flex-wrap mb-2" style="flex-shrink:0">
         <button class="btn btn-sm btn-dark cat-btn active" data-cat="all">All</button>
         <button class="btn btn-sm btn-outline-dark cat-btn" data-cat="bulk"><i class="bi bi-basket"></i> Bulk</button>
         <button class="btn btn-sm btn-outline-secondary cat-btn" data-cat="consignment" style="color:#7c3aed;border-color:#7c3aed"><i class="bi bi-boxes"></i> Amenities</button>
@@ -325,7 +331,8 @@ function printPosReceipt() {
     </div>
 
     <!-- Product grid -->
-    <div class="row g-2" id="product-grid" style="overflow-y:auto;flex:1">
+    <div style="flex:1;min-height:0;overflow-y:auto;overflow-x:hidden">
+    <div class="row g-2" id="product-grid">
     <?php foreach ($products as $p):
         $isBulk   = $p['product_type'] === 'bulk';
         $isCons   = ($p['product_source'] ?? 'owned') === 'consignment';
@@ -374,16 +381,17 @@ function printPosReceipt() {
     </div>
     <?php endforeach; ?>
     </div>
+    </div><!-- /product-grid scroll wrapper -->
 
 </div>
 
 <!-- ── Right: cart + payment ── -->
-<div class="col-lg-4 d-flex flex-column" style="overflow-y:auto">
+<div class="col-lg-4 d-flex flex-column" style="min-height:0;overflow:hidden">
 <div class="card h-100 shadow-sm d-flex flex-column" style="min-height:0">
-<div class="card-body d-flex flex-column p-2" style="overflow:hidden">
+<div class="card-body d-flex flex-column p-2" style="min-height:0">
 
 <!-- Customer selector -->
-<div class="mb-2">
+<div class="mb-2" style="flex-shrink:0">
     <div class="input-group input-group-sm">
         <button type="button" class="input-group-text btn btn-outline-secondary" onclick="openNewCustModal()" title="Add new customer"><i class="bi bi-person-plus"></i></button>
         <input type="text" id="cust-search" class="form-control" placeholder="Customer (type to search or leave for cash sale)" autocomplete="off">
@@ -395,7 +403,7 @@ function printPosReceipt() {
 </div>
 
 <!-- Cart table -->
-<div style="overflow-y:auto;flex:1;min-height:80px">
+<div style="flex:1;min-height:0;overflow-y:auto">
 <table class="table table-sm table-hover mb-0" id="cart-table">
     <thead class="table-dark sticky-top"><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th><th></th></tr></thead>
     <tbody id="cart-body"><tr id="empty-row"><td colspan="5" class="text-center text-muted py-3 small">Cart is empty</td></tr></tbody>
@@ -403,7 +411,7 @@ function printPosReceipt() {
 </div>
 
 <!-- Totals -->
-<div class="border-top pt-2 mt-1">
+<div class="border-top pt-2 mt-1" style="flex-shrink:0">
     <div class="d-flex justify-content-between small"><span>Subtotal</span><span id="subtotal-val">$0.00</span></div>
     <div class="d-flex justify-content-between small mb-1 align-items-center">
         <span id="disc-label">Discount
@@ -424,25 +432,33 @@ function printPosReceipt() {
 </div>
 
 <!-- Checkout -->
-<div class="border-top pt-2">
+<div class="border-top pt-2" style="flex-shrink:0">
     <input type="text" id="sale-note" class="form-control form-control-sm mb-2" placeholder="Note (optional)">
     <button type="button" class="btn btn-success w-100 fw-bold py-2" onclick="openCheckout()">
         <i class="bi bi-bag-check me-2"></i>Checkout
     </button>
-    <button type="button" class="btn btn-outline-danger w-100 mt-1 btn-sm" onclick="clearCart()">
-        <i class="bi bi-trash me-1"></i>Clear Cart
-    </button>
-    <button type="button" class="btn btn-outline-warning w-100 mt-1 btn-sm" onclick="holdSale()">
-        <i class="bi bi-pause-circle me-1"></i>Hold Sale
-    </button>
+    <div class="row g-1 mt-1">
+        <div class="col-4">
+            <button type="button" class="btn btn-outline-danger w-100 btn-sm" onclick="clearCart()">
+                <i class="bi bi-trash"></i> Clear
+            </button>
+        </div>
+        <div class="col-4">
+            <button type="button" class="btn btn-outline-warning w-100 btn-sm" onclick="holdSale()">
+                <i class="bi bi-pause-circle"></i> Hold
+            </button>
+        </div>
+        <div class="col-4">
+            <button type="button" id="held-btn" class="btn btn-warning w-100 btn-sm" onclick="openHeldSales()" style="display:none">
+                <i class="bi bi-clock-history"></i> <span id="held-badge" class="badge bg-danger">0</span>
+            </button>
+        </div>
+    </div>
     <?php if ($cashDrawer): ?>
     <button type="button" class="btn btn-outline-secondary w-100 mt-1 btn-sm" onclick="openCashDrawer()">
         <i class="bi bi-safe me-1"></i>Open Drawer
     </button>
     <?php endif; ?>
-    <button type="button" id="held-btn" class="btn btn-warning w-100 mt-1 btn-sm" onclick="openHeldSales()" style="display:none">
-        <i class="bi bi-clock-history me-1"></i>Held Sales <span id="held-badge" class="badge bg-danger ms-1">0</span>
-    </button>
     <form method="POST" id="sale-form" onsubmit="return prepareSubmit()">
         <input type="hidden" name="cart_json"       id="cart-json">
         <input type="hidden" name="discount"        id="hd-discount">
@@ -835,6 +851,7 @@ function toggleBoxMode(id) {
         item.qty   = Math.max(item.upb, Math.ceil(item.qty / item.upb) * item.upb);
     } else {
         item.price = item.unitPrice;
+        item.qty   = 1;
     }
     renderCart();
 }

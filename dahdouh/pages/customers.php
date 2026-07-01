@@ -101,7 +101,8 @@ if ($viewId) {
             SELECT s.id, s.receipt_no, s.sale_date, s.total, s.subtotal, s.discount,
                    s.payment_method, s.currency_paid, s.paid_usd, s.paid_lbp,
                    s.is_void, s.void_reason,
-                   COUNT(si.id) AS item_count
+                   COUNT(si.id) AS item_count,
+                   GROUP_CONCAT(si.product_name ORDER BY si.id SEPARATOR ', ') AS items_list
             FROM sales s
             LEFT JOIN sale_items si ON si.sale_id = s.id
             WHERE s.customer_id=?
@@ -251,7 +252,12 @@ alertBox($message);
             <tr>
                 <td class="small"><?= date('d/m/y', strtotime($r['sale_date'])) ?></td>
                 <td class="fw-semibold"><?= htmlspecialchars($r['receipt_no'] ?: '—') ?></td>
-                <td class="text-muted"><?= $r['item_count'] ?></td>
+                <td>
+                    <div class="text-muted small" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                         title="<?= htmlspecialchars($r['items_list'] ?? '') ?>">
+                        <?= (int)$r['item_count'] ?> — <?= htmlspecialchars($r['items_list'] ?? '—') ?>
+                    </div>
+                </td>
                 <td class="fw-bold"><?= fmtUSD($r['total']) ?></td>
                 <td>
                     <?php if ($r['is_void']): ?>
