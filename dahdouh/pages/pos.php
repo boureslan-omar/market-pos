@@ -296,20 +296,28 @@ function printPosReceipt() {
 <?php else: ?>
 <!-- ═══════════ POS INTERFACE ═══════════ -->
 <style>
-/* POS-only: make body a flex column so the container fills whatever
-   space remains below the navbar — no hardcoded navbar height needed */
-html { height: 100%; overflow: hidden; }
-body { height: 100%; overflow: hidden; display: flex; flex-direction: column; margin: 0; }
+/* POS only — body becomes a flex column; content fills what's left below the navbar */
+html, body { height:100%; overflow:hidden; margin:0; }
+body { display:flex; flex-direction:column; }
+#pos-wrap { display:flex; flex:1; min-height:0; gap:.5rem; padding:.5rem .75rem; overflow:hidden; }
+/* Left panel */
+#pos-left  { display:flex; flex-direction:column; flex:1; min-width:0; min-height:0; overflow:hidden; }
+/* Product grid uses CSS Grid — no Bootstrap row negative-margin issues */
+#pos-left > .pos-grid-wrap { flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; }
+#product-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:.5rem; align-content:start; padding-bottom:.5rem; }
+/* Right panel */
+#pos-right { display:flex; flex-direction:column; flex:0 0 380px; min-height:0; overflow:hidden; }
+#pos-right .pos-card { display:flex; flex-direction:column; flex:1; min-height:0; background:#fff; border-radius:.375rem; box-shadow:0 .125rem .25rem rgba(0,0,0,.075); }
+#pos-right .pos-card-body { display:flex; flex-direction:column; flex:1; min-height:0; padding:.5rem; }
+#cart-scroll { flex:1; min-height:0; overflow-y:auto; }
 </style>
 
-<div class="container-fluid" style="padding:.5rem .75rem;flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column">
-<div class="row g-2" style="flex:1;min-height:0">
+<div id="pos-wrap">
 
-<!-- ── Left: barcode + product grid ── -->
-<div class="col-lg-8 d-flex flex-column" style="min-height:0;overflow:hidden">
+<!-- ══ LEFT: barcode + categories + product grid ══ -->
+<div id="pos-left">
 
-    <!-- Barcode strip -->
-    <div class="input-group mb-2" style="flex-shrink:0">
+    <div class="input-group mb-2">
         <span class="input-group-text bg-dark text-white"><i class="bi bi-upc-scan"></i></span>
         <input type="text" id="barcode-input" class="form-control form-control-lg"
                placeholder="Scan barcode or type product name — press Enter"
@@ -320,7 +328,6 @@ body { height: 100%; overflow: hidden; display: flex; flex-direction: column; ma
         </button>
     </div>
 
-    <!-- Category tabs -->
     <div class="d-flex gap-1 flex-wrap mb-2" style="flex-shrink:0">
         <button class="btn btn-sm btn-dark cat-btn active" data-cat="all">All</button>
         <button class="btn btn-sm btn-outline-dark cat-btn" data-cat="bulk"><i class="bi bi-basket"></i> Bulk</button>
@@ -330,16 +337,15 @@ body { height: 100%; overflow: hidden; display: flex; flex-direction: column; ma
         <?php endforeach; ?>
     </div>
 
-    <!-- Product grid -->
-    <div style="flex:1;min-height:0;overflow-y:auto;overflow-x:hidden">
-    <div class="row g-2" id="product-grid">
+    <div class="pos-grid-wrap">
+    <div id="product-grid">
     <?php foreach ($products as $p):
-        $isBulk   = $p['product_type'] === 'bulk';
-        $isCons   = ($p['product_source'] ?? 'owned') === 'consignment';
-        $outStock  = !$isBulk && $p['stock'] <= 0;
-        $lowStock  = !$isBulk && !$outStock && $p['stock'] <= $p['low_stock_alert'];
+        $isBulk  = $p['product_type'] === 'bulk';
+        $isCons  = ($p['product_source'] ?? 'owned') === 'consignment';
+        $outStock = !$isBulk && $p['stock'] <= 0;
+        $lowStock = !$isBulk && !$outStock && $p['stock'] <= $p['low_stock_alert'];
     ?>
-    <div class="col-6 col-sm-4 col-md-3 col-xl-2 prod-item"
+    <div class="prod-item"
          data-cat="<?= $p['category_id'] ?>"
          data-bulk="<?= $isBulk?1:0 ?>"
          data-cons="<?= $isCons?1:0 ?>">
@@ -381,17 +387,17 @@ body { height: 100%; overflow: hidden; display: flex; flex-direction: column; ma
     </div>
     <?php endforeach; ?>
     </div>
-    </div><!-- /product-grid scroll wrapper -->
+    </div><!-- /pos-grid-wrap -->
 
-</div>
+</div><!-- /#pos-left -->
 
-<!-- ── Right: cart + payment ── -->
-<div class="col-lg-4 d-flex flex-column" style="min-height:0;overflow:hidden">
-<div class="card h-100 shadow-sm d-flex flex-column" style="min-height:0">
-<div class="card-body d-flex flex-column p-2" style="min-height:0">
+<!-- ══ RIGHT: cart + payment ══ -->
+<div id="pos-right">
+<div class="pos-card">
+<div class="pos-card-body">
 
 <!-- Customer selector -->
-<div class="mb-2" style="flex-shrink:0">
+<div style="flex-shrink:0" class="mb-2">
     <div class="input-group input-group-sm">
         <button type="button" class="input-group-text btn btn-outline-secondary" onclick="openNewCustModal()" title="Add new customer"><i class="bi bi-person-plus"></i></button>
         <input type="text" id="cust-search" class="form-control" placeholder="Customer (type to search or leave for cash sale)" autocomplete="off">
@@ -402,8 +408,8 @@ body { height: 100%; overflow: hidden; display: flex; flex-direction: column; ma
     <input type="hidden" id="customer_id_val" value="">
 </div>
 
-<!-- Cart table -->
-<div style="flex:1;min-height:0;overflow-y:auto">
+<!-- Cart items — scrolls independently -->
+<div id="cart-scroll">
 <table class="table table-sm table-hover mb-0" id="cart-table">
     <thead class="table-dark sticky-top"><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th><th></th></tr></thead>
     <tbody id="cart-body"><tr id="empty-row"><td colspan="5" class="text-center text-muted py-3 small">Cart is empty</td></tr></tbody>
@@ -437,27 +443,13 @@ body { height: 100%; overflow: hidden; display: flex; flex-direction: column; ma
     <button type="button" class="btn btn-success w-100 fw-bold py-2" onclick="openCheckout()">
         <i class="bi bi-bag-check me-2"></i>Checkout
     </button>
-    <div class="row g-1 mt-1">
-        <div class="col-4">
-            <button type="button" class="btn btn-outline-danger w-100 btn-sm" onclick="clearCart()">
-                <i class="bi bi-trash"></i> Clear
-            </button>
-        </div>
-        <div class="col-4">
-            <button type="button" class="btn btn-outline-warning w-100 btn-sm" onclick="holdSale()">
-                <i class="bi bi-pause-circle"></i> Hold
-            </button>
-        </div>
-        <div class="col-4">
-            <button type="button" id="held-btn" class="btn btn-warning w-100 btn-sm" onclick="openHeldSales()" style="display:none">
-                <i class="bi bi-clock-history"></i> <span id="held-badge" class="badge bg-danger">0</span>
-            </button>
-        </div>
+    <div class="d-flex gap-1 mt-1">
+        <button type="button" class="btn btn-outline-danger btn-sm flex-fill" onclick="clearCart()"><i class="bi bi-trash"></i> Clear</button>
+        <button type="button" class="btn btn-outline-warning btn-sm flex-fill" onclick="holdSale()"><i class="bi bi-pause-circle"></i> Hold</button>
+        <button type="button" id="held-btn" class="btn btn-warning btn-sm flex-fill" onclick="openHeldSales()" style="display:none"><i class="bi bi-clock-history"></i> <span id="held-badge" class="badge bg-danger">0</span></button>
     </div>
     <?php if ($cashDrawer): ?>
-    <button type="button" class="btn btn-outline-secondary w-100 mt-1 btn-sm" onclick="openCashDrawer()">
-        <i class="bi bi-safe me-1"></i>Open Drawer
-    </button>
+    <button type="button" class="btn btn-outline-secondary w-100 mt-1 btn-sm" onclick="openCashDrawer()"><i class="bi bi-safe me-1"></i>Open Drawer</button>
     <?php endif; ?>
     <form method="POST" id="sale-form" onsubmit="return prepareSubmit()">
         <input type="hidden" name="cart_json"       id="cart-json">
@@ -474,12 +466,11 @@ body { height: 100%; overflow: hidden; display: flex; flex-direction: column; ma
     </form>
 </div>
 
-</div>
-</div>
-</div>
+</div><!-- /.pos-card-body -->
+</div><!-- /.pos-card -->
+</div><!-- /#pos-right -->
 
-</div><!-- row -->
-</div>
+</div><!-- /#pos-wrap -->
 
 <!-- ═══════════ CHECKOUT MODAL ═══════════ -->
 <div class="modal fade" id="checkoutModal" tabindex="-1">
