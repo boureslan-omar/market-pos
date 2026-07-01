@@ -230,4 +230,13 @@ $newVersion = [
 ];
 file_put_contents($versionFile, json_encode($newVersion, JSON_PRETTY_PRINT) . PHP_EOL);
 
+// ── 10. Write update notice (shown to admin on next dashboard visit) ──────────
+$notice = [
+    'from_version' => $local['version'],
+    'to_version'   => $manifest['version'],
+    'changelog'    => $manifest['changelog'] ?? '',
+    'updated_at'   => date('Y-m-d H:i:s'),
+];
+file_put_contents(__DIR__ . '/update_notice.json', json_encode($notice, JSON_PRETTY_PRINT));
+
 log_msg('DONE — System updated to v' . $manifest['version']);

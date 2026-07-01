@@ -1,7 +1,7 @@
 {
-    "version": "3.5.6",
+    "version": "3.5.7",
     "release_date": "2026-07-01",
-    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.6/dahdouh-v3.5.6.zip",
+    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.7/dahdouh-v3.5.7.zip",
     "upgrades": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
-    "changelog": "v3.5.6 — Migration 19: add missing DB columns (settled_by, units_per_box, sell_price_box); constants fallback in pos/api; config.php no longer protected."
+    "changelog": "v3.5.7 — After each auto-update, a changelog screen now appears when the admin opens the dashboard showing what was updated and a Go to Dashboard button."
 }

@@ -4,6 +4,12 @@ require_once __DIR__ . '/includes/functions.php';
 require_once __DIR__ . '/includes/layout.php';
 requireRole();
 
+// Show update notice once after auto-update
+if (file_exists(__DIR__ . '/update_notice.json') && currentUser()['role'] === 'admin') {
+    header('Location: /dahdouh/pages/update_notice.php');
+    exit;
+}
+
 $today    = date('Y-m-d');
 $stats    = getStats($pdo, $today, $today);
 $lowStock = getLowStock($pdo, 8);
