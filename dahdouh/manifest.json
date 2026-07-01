@@ -1,7 +1,7 @@
 {
-    "version": "3.5.2",
+    "version": "3.5.3",
     "release_date": "2026-07-01",
-    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.2/dahdouh-v3.5.2.zip",
+    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.3/dahdouh-v3.5.3.zip",
     "upgrades": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
-    "changelog": "v3.5.2 — Auto-update fix: hardcoded fallback manifest URL so update works even on fresh installs without settings configured."
+    "changelog": "v3.5.3 — Auto-update now works without php_zip extension using PowerShell fallback (Expand-Archive)."
 }

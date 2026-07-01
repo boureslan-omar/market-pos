@@ -83,51 +83,91 @@ file_put_contents($tmpZip, $zipData);
 log_msg('Downloaded ' . round(strlen($zipData) / 1024) . ' KB.');
 
 // ── 7. Extract zip (skip protected files) ─────────────────────────────────────
-if (!class_exists('ZipArchive')) {
-    log_msg('ERROR — ZipArchive PHP extension not available.');
-    @unlink($tmpZip);
-    exit(1);
-}
-
-$zip = new ZipArchive();
-if ($zip->open($tmpZip) !== true) {
-    log_msg('ERROR — Cannot open downloaded zip file.');
-    @unlink($tmpZip);
-    exit(1);
-}
-
 $dest      = __DIR__;
 $extracted = 0;
 $skipped   = 0;
 
-for ($i = 0; $i < $zip->numFiles; $i++) {
-    $entry = $zip->getNameIndex($i);
-
-    // Strip top-level folder from zip (e.g. "dahdouh/pages/pos.php" → "pages/pos.php")
-    $rel = preg_replace('#^[^/]+/#', '', $entry);
-    if ($rel === '' || $rel === false) continue;
-
-    // Skip protected files
-    $relNorm = str_replace('\\', '/', $rel);
-    if (in_array($relNorm, PROTECTED_FILES)) {
-        $skipped++;
-        continue;
+if (class_exists('ZipArchive')) {
+    // ── Path A: native ZipArchive ─────────────────────────────────────────────
+    $zip = new ZipArchive();
+    if ($zip->open($tmpZip) !== true) {
+        log_msg('ERROR — Cannot open downloaded zip file.');
+        @unlink($tmpZip);
+        exit(1);
     }
 
-    $target = $dest . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $rel);
+    for ($i = 0; $i < $zip->numFiles; $i++) {
+        $entry = $zip->getNameIndex($i);
+        $rel   = preg_replace('#^[^/]+/#', '', $entry);
+        if ($rel === '' || $rel === false) continue;
 
-    if (str_ends_with($entry, '/')) {
-        if (!is_dir($target)) mkdir($target, 0755, true);
-    } else {
-        $dir = dirname($target);
-        if (!is_dir($dir)) mkdir($dir, 0755, true);
-        file_put_contents($target, $zip->getFromIndex($i));
-        $extracted++;
+        $relNorm = str_replace('\\', '/', $rel);
+        if (in_array($relNorm, PROTECTED_FILES)) { $skipped++; continue; }
+
+        $target = $dest . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $rel);
+
+        if (substr($entry, -1) === '/') {
+            if (!is_dir($target)) mkdir($target, 0755, true);
+        } else {
+            $dir = dirname($target);
+            if (!is_dir($dir)) mkdir($dir, 0755, true);
+            file_put_contents($target, $zip->getFromIndex($i));
+            $extracted++;
+        }
     }
+    $zip->close();
+    @unlink($tmpZip);
+
+} else {
+    // ── Path B: PowerShell Expand-Archive fallback (Windows) ─────────────────
+    log_msg('ZipArchive not available — using PowerShell fallback.');
+    $tmpDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pos_upd_' . time();
+    $psCmd  = 'powershell -NoProfile -NonInteractive -Command '
+            . '"Expand-Archive -LiteralPath \'' . str_replace("'", "''", $tmpZip) . '\''
+            . ' -DestinationPath \'' . str_replace("'", "''", $tmpDir) . '\' -Force"';
+    exec($psCmd, $psOut, $psRet);
+
+    if ($psRet !== 0 || !is_dir($tmpDir)) {
+        log_msg('ERROR — Extraction failed. Enable php_zip in php.ini or check PowerShell access.');
+        @unlink($tmpZip);
+        exit(1);
+    }
+
+    // Top-level folder inside the zip (e.g. "dahdouh/")
+    $tops   = glob($tmpDir . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR);
+    $srcRoot = (!empty($tops)) ? $tops[0] : $tmpDir;
+
+    $rit = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($srcRoot, RecursiveDirectoryIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::SELF_FIRST
+    );
+    foreach ($rit as $fileInfo) {
+        $rel     = str_replace('\\', '/', substr($fileInfo->getPathname(), strlen($srcRoot) + 1));
+        $relNorm = ltrim($rel, '/');
+        if (in_array($relNorm, PROTECTED_FILES)) { $skipped++; continue; }
+        $target  = $dest . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relNorm);
+        if ($fileInfo->isDir()) {
+            if (!is_dir($target)) mkdir($target, 0755, true);
+        } else {
+            $dir = dirname($target);
+            if (!is_dir($dir)) mkdir($dir, 0755, true);
+            copy($fileInfo->getPathname(), $target);
+            $extracted++;
+        }
+    }
+
+    // Clean up temp dir
+    $cleanup = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($tmpDir, RecursiveDirectoryIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::CHILD_FIRST
+    );
+    foreach ($cleanup as $f) {
+        $f->isDir() ? rmdir($f->getPathname()) : unlink($f->getPathname());
+    }
+    rmdir($tmpDir);
+    @unlink($tmpZip);
 }
 
-$zip->close();
-@unlink($tmpZip);
 log_msg('Extracted ' . $extracted . ' files (' . $skipped . ' protected files preserved).');
 
 // ── 8. Run pending migrations ─────────────────────────────────────────────────
