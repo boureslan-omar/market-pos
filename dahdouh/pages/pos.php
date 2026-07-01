@@ -2,6 +2,11 @@
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/layout.php';
+// Fallback constants for installs with older config.php
+defined('CUSTOMER_DISPLAY') || define('CUSTOMER_DISPLAY', false);
+defined('CASH_DRAWER')       || define('CASH_DRAWER',       false);
+defined('VFD_ENABLED')       || define('VFD_ENABLED',       false);
+defined('VFD_COM_PORT')      || define('VFD_COM_PORT',      'COM3');
 requireRole('admin','cashier');
 
 $message       = '';

@@ -11,11 +11,12 @@ require_once __DIR__ . '/includes/backup_functions.php';
 
 // Files that must never be overwritten by an update
 const PROTECTED_FILES = [
-    'includes/config.php',
     'assets/img/logo.png',
     'version.json',
     'backup_cron.log',
     'auto_update.log',
+    'license.lic',
+    'license_ts.dat',
 ];
 
 function log_msg($msg) {
