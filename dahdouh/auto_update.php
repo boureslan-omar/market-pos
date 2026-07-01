@@ -133,9 +133,14 @@ if (class_exists('ZipArchive')) {
         exit(1);
     }
 
-    // Top-level folder inside the zip (e.g. "dahdouh/")
-    $tops   = glob($tmpDir . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR);
-    $srcRoot = (!empty($tops)) ? $tops[0] : $tmpDir;
+    // Top-level folder inside the zip (e.g. "dahdouh/") — use scandir, glob+GLOB_ONLYDIR unreliable on Windows
+    $srcRoot = $tmpDir;
+    foreach (scandir($tmpDir) as $item) {
+        if ($item !== '.' && $item !== '..' && is_dir($tmpDir . DIRECTORY_SEPARATOR . $item)) {
+            $srcRoot = $tmpDir . DIRECTORY_SEPARATOR . $item;
+            break;
+        }
+    }
 
     $rit = new RecursiveIteratorIterator(
         new RecursiveDirectoryIterator($srcRoot, RecursiveDirectoryIterator::SKIP_DOTS),
