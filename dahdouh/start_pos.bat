@@ -75,6 +75,11 @@ echo  =========================================
 echo.
 timeout /t 1 /nobreak >nul
 
+:: Force Chrome/Edge to use the Windows default printer with kiosk-printing
+:: (without this, kiosk-printing uses the last saved destination which may be PDF)
+reg add "HKCU\SOFTWARE\Policies\Google\Chrome"    /v "DefaultPrinterSelection" /t REG_SZ /d "{\"kind\":\"default\"}" /f >nul 2>&1
+reg add "HKCU\SOFTWARE\Policies\Microsoft\Edge"   /v "DefaultPrinterSelection" /t REG_SZ /d "{\"kind\":\"default\"}" /f >nul 2>&1
+
 set POS_URL=http://localhost/dahdouh/
 set BROWSER=
 
