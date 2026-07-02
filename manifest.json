@@ -1,0 +1,7 @@
+{
+    "version": "3.5.18",
+    "release_date": "2026-07-02",
+    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.18/dahdouh-v3.5.18.zip",
+    "upgrades": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+    "changelog": "v3.5.18 â€” Barcode label printing: label size selector (50x30, 57x32, 58x40, 38x25, 62x29, custom), page size matches physical label to eliminate blank labels, all elements scale to fit chosen size."
+}
