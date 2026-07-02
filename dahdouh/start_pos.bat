@@ -66,7 +66,7 @@ echo  [..] Checking for updates...
 "C:\xampp\php\php.exe" "C:\xampp\htdocs\dahdouh\auto_update.php" >> "C:\xampp\htdocs\dahdouh\auto_update.log" 2>&1
 echo  [OK] Update check done.
 
-:: ── Step 4: Open POS in browser ───────────────────────────────────────────────
+:: ── Step 4: Open POS in browser (kiosk-printing = no print dialog) ────────────
 :OPEN_BROWSER
 echo.
 echo  =========================================
@@ -74,6 +74,23 @@ echo   Ready! Opening POS in browser...
 echo  =========================================
 echo.
 timeout /t 1 /nobreak >nul
-start "POS" /b "http://localhost/dahdouh/"
+
+set POS_URL=http://localhost/dahdouh/
+set BROWSER=
+
+if exist "%PROGRAMFILES%\Google\Chrome\Application\chrome.exe"         set "BROWSER=%PROGRAMFILES%\Google\Chrome\Application\chrome.exe"
+if exist "%PROGRAMFILES(X86)%\Google\Chrome\Application\chrome.exe"   set "BROWSER=%PROGRAMFILES(X86)%\Google\Chrome\Application\chrome.exe"
+if exist "%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"         set "BROWSER=%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"
+if not defined BROWSER (
+    if exist "%PROGRAMFILES(X86)%\Microsoft\Edge\Application\msedge.exe" set "BROWSER=%PROGRAMFILES(X86)%\Microsoft\Edge\Application\msedge.exe"
+    if exist "%PROGRAMFILES%\Microsoft\Edge\Application\msedge.exe"      set "BROWSER=%PROGRAMFILES%\Microsoft\Edge\Application\msedge.exe"
+)
+
+if defined BROWSER (
+    start "" "%BROWSER%" --kiosk-printing "%POS_URL%"
+) else (
+    start "POS" /b "%POS_URL%"
+)
+
 timeout /t 2 /nobreak >nul
 exit

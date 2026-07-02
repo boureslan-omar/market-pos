@@ -1,7 +1,7 @@
 {
-    "version": "3.5.7",
-    "release_date": "2026-07-01",
-    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.7/dahdouh-v3.5.7.zip",
+    "version": "3.5.8",
+    "release_date": "2026-07-02",
+    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.8/dahdouh-v3.5.8.zip",
     "upgrades": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
-    "changelog": "v3.5.7 — After each auto-update, a changelog screen now appears when the admin opens the dashboard showing what was updated and a Go to Dashboard button."
+    "changelog": "v3.5.8 — Receipt printing now uses a hidden iframe instead of a popup window; start_pos.bat launches Chrome/Edge with --kiosk-printing so receipts print directly without the print dialog (POS, Customers, Reports)."
 }
