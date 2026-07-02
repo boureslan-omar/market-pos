@@ -1,7 +1,7 @@
 {
-    "version": "3.5.15",
+    "version": "3.5.16",
     "release_date": "2026-07-02",
-    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.15/dahdouh-v3.5.15.zip",
+    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.16/dahdouh-v3.5.16.zip",
     "upgrades": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
-    "changelog": "v3.5.15 — requireRole() fallback added in three places (index.php, layout.php, functions.php) to handle clients with any version of config.php."
+    "changelog": "v3.5.16 — Receipt layout fixed: added IE=Edge meta tag so flexbox works in WebBrowser printer; added column padding so Qty/Price/Total no longer run together."
 }

@@ -696,16 +696,17 @@ function printReceiptWindow() {
         '*{color:#000!important;background:transparent!important}' +
         'body{font-family:"Courier New",Courier,monospace;font-size:12px;width:72mm;margin:0;padding:0}' +
         'table{width:100%;border-collapse:collapse}' +
-        'th{font-size:11px;border-bottom:1px dashed #000;padding:2px 0;text-align:left}' +
-        'td{font-size:11px;padding:2px 0;vertical-align:top}' +
+        'th{font-size:11px;border-bottom:1px dashed #000;padding:2px 0 2px 4px;text-align:left}th:first-child{padding-left:0}' +
+        'td{font-size:11px;padding:2px 0 2px 4px;vertical-align:top}td:first-child{padding-left:0}' +
         '.text-end{text-align:right}.text-center{text-align:center}' +
         '.fw-bold{font-weight:bold}.fs-5{font-size:13px}' +
         '.d-flex{display:flex}.justify-content-between{justify-content:space-between}' +
         '.badge{display:inline-block;border:1px solid #000;padding:1px 6px;font-weight:bold;font-size:11px}' +
         'hr{border:none;border-top:1px dashed #000;margin:4px 0}' +
         '.small{font-size:10px}.mt-1{margin-top:2px}.mt-2{margin-top:4px}.mt-3{margin-top:6px}.mb-0{margin-bottom:0}.mb-3{margin-bottom:6px}';
-    const full = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Receipt</title>' +
-        '<style>' + css + '</style></head><body>' + html + '</body></html>';
+    const full = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+        '<meta http-equiv="X-UA-Compatible" content="IE=Edge">' +
+        '<title>Receipt</title><style>' + css + '</style></head><body>' + html + '</body></html>';
     fetch('/dahdouh/pages/api.php?action=print_receipt', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
