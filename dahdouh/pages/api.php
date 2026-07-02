@@ -12,22 +12,34 @@ if (!isLoggedIn()) { echo json_encode(['error'=>'Not authenticated']); exit; }
 $action = $_GET['action'] ?? '';
 
 // ─── VFD / LED display via COM port ──────────────────────────────────────────
+function vfd_write(string $port, int $baud, string $line1, string $line2): array {
+    // Set COM port baud rate and serial params before opening
+    @exec('mode ' . $port . ': baud=' . $baud . ' data=8 stop=1 parity=n');
+    $fp = @fopen($port . ':', 'r+b');
+    if (!$fp) $fp = @fopen($port . ':', 'wb');
+    if (!$fp) return ['error' => 'Cannot open ' . $port . ' — check Device Manager'];
+    fwrite($fp, "\x0C");                          // clear screen (most displays)
+    fwrite($fp, str_pad(substr($line1,0,20), 20) . "\r"); // line 1 + CR
+    fwrite($fp, str_pad(substr($line2,0,20), 20) . "\r"); // line 2 + CR
+    fclose($fp);
+    return ['ok' => true];
+}
+
 if ($action === 'vfd_display') {
     if (!VFD_ENABLED) { echo json_encode(['skip' => 'VFD disabled']); exit; }
     $total = (float)($_POST['total'] ?? 0);
     $line1 = substr(trim($_POST['line1'] ?? ''), 0, 20);
     $line2 = 'Total: $' . number_format($total, 2);
-    $port  = VFD_COM_PORT;
-    $fp = @fopen($port . ':', 'w');
-    if ($fp) {
-        fwrite($fp, "\x0C");        // Form feed — clears most VFD displays
-        fwrite($fp, str_pad($line1, 20) . "\n");
-        fwrite($fp, str_pad($line2, 20));
-        fclose($fp);
-        echo json_encode(['ok' => true]);
-    } else {
-        echo json_encode(['error' => 'Cannot open ' . $port]);
-    }
+    $port  = strtoupper(trim(VFD_COM_PORT));
+    $baud  = (int)(setting('vfd_baud', '9600') ?: 9600);
+    echo json_encode(vfd_write($port, $baud, $line1, $line2));
+    exit;
+}
+
+if ($action === 'vfd_test') {
+    $port = strtoupper(trim(setting('vfd_com_port', 'COM1')));
+    $baud = (int)(setting('vfd_baud', '9600') ?: 9600);
+    echo json_encode(vfd_write($port, $baud, '*** TEST ***', 'POS Display OK'));
     exit;
 }
 

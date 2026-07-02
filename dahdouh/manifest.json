@@ -1,7 +1,7 @@
 {
-    "version": "3.5.16",
+    "version": "3.5.17",
     "release_date": "2026-07-02",
-    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.16/dahdouh-v3.5.16.zip",
+    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.17/dahdouh-v3.5.17.zip",
     "upgrades": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
-    "changelog": "v3.5.16 — Receipt layout fixed: added IE=Edge meta tag so flexbox works in WebBrowser printer; added column padding so Qty/Price/Total no longer run together."
+    "changelog": "v3.5.17 — VFD customer display: added baud rate setting (default 9600), mode command sets serial params before opening port, Test Display button in settings, fixed COM port path handling."
 }

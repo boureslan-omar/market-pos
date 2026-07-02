@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    $fields = ['store_name','store_address','store_phone','exchange_rate','base_currency','auto_print_receipt','theme_brand_color','theme_accent_color','update_manifest_url','vfd_com_port'];
+    $fields = ['store_name','store_address','store_phone','exchange_rate','base_currency','auto_print_receipt','theme_brand_color','theme_accent_color','update_manifest_url','vfd_com_port','vfd_baud'];
     foreach ($fields as $f) {
         if (isset($_POST[$f])) saveSetting($pdo, $f, trim($_POST[$f]));
     }
@@ -134,12 +134,25 @@ alertBox($message);
             <div class="text-muted small">When ON, the POS sends price updates to a hardware VFD or LED display via a COM port. The display shows item total on every cart change.</div>
         </label>
     </div>
-    <div class="ms-4 mb-1">
-        <label class="form-label small mb-1">COM Port</label>
-        <input type="text" name="vfd_com_port" class="form-control form-control-sm" style="max-width:120px"
-               value="<?= htmlspecialchars(setting('vfd_com_port','COM3')) ?>" placeholder="COM3">
-        <div class="form-text">Check Device Manager for the correct port number (e.g. COM3, COM5).</div>
+    <div class="ms-4 mb-2 d-flex gap-3 align-items-end flex-wrap">
+        <div>
+            <label class="form-label small mb-1">COM Port</label>
+            <input type="text" name="vfd_com_port" class="form-control form-control-sm" style="max-width:100px"
+                   value="<?= htmlspecialchars(setting('vfd_com_port','COM1')) ?>" placeholder="COM1">
+        </div>
+        <div>
+            <label class="form-label small mb-1">Baud Rate</label>
+            <select name="vfd_baud" class="form-select form-select-sm" style="max-width:120px">
+                <?php foreach (['9600','4800','19200','38400','2400'] as $b): ?>
+                <option value="<?= $b ?>" <?= setting('vfd_baud','9600')===$b?'selected':'' ?>><?= $b ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="testVfd()">Test Display</button>
+        </div>
     </div>
+    <div class="ms-4 mb-1 form-text">Save settings first, then click Test Display to verify the connection.</div>
 </div>
 
 <!-- Theme Colors -->
@@ -275,6 +288,13 @@ alertBox($message);
         applyScale(1);
     };
 })();
+
+function testVfd() {
+    fetch('/dahdouh/pages/api.php?action=vfd_test', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => alert(d.ok ? 'Display responded OK — check the screen!' : ('Error: ' + (d.error || 'unknown'))))
+        .catch(() => alert('Request failed — check that Apache is running.'));
+}
 </script>
 
 <!-- ── License Info ──────────────────────────────────────────────── -->
