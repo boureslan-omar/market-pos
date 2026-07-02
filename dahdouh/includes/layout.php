@@ -1,4 +1,10 @@
 <?php
+// Safety net: define requireRole() if an old config.php on the client didn't include it
+if (!function_exists('requireRole')) {
+    function requireRole(): void {
+        if (empty($_SESSION['user_id'])) { header('Location: /dahdouh/login.php'); exit; }
+    }
+}
 function hexToRgb($hex) {
     $hex = ltrim($hex, '#');
     return [hexdec(substr($hex,0,2)), hexdec(substr($hex,2,2)), hexdec(substr($hex,4,2))];
