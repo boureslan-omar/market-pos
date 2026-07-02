@@ -1,7 +1,7 @@
 {
-    "version": "3.5.19",
+    "version": "3.5.20",
     "release_date": "2026-07-02",
-    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.19/dahdouh-v3.5.19.zip",
+    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.20/dahdouh-v3.5.20.zip",
     "upgrades": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
-    "changelog": "v3.5.19 - Barcode labels: default size now 40x25mm to match physical label stock."
+    "changelog": "v3.5.20 - Barcode labels: zero margin/padding on all label elements during print."
 }
