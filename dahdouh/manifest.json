@@ -1,7 +1,7 @@
 {
-    "version": "3.5.10",
+    "version": "3.5.11",
     "release_date": "2026-07-02",
-    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.10/dahdouh-v3.5.10.zip",
+    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.11/dahdouh-v3.5.11.zip",
     "upgrades": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
-    "changelog": "v3.5.10 — Receipt printing now goes directly to the Windows default printer with no dialog and no PDF. The print button sends the receipt to a background PowerShell process that prints silently via the system default printer."
+    "changelog": "v3.5.11 — Fixed print_receipt exec compatibility: output buffering prevents PHP warnings from breaking JSON response; falls back through popen/exec/shell_exec automatically; uses full PowerShell path."
 }

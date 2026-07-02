@@ -292,8 +292,9 @@ function printPosReceipt() {
         body: 'html=' + encodeURIComponent(html)
     }).then(r => r.json()).then(d => {
         if (d.ok) showToast('Sent to printer', 'success');
-        else showToast('Print error: ' + (d.error || 'failed'), 'danger');
-    }).catch(() => showToast('Print error', 'danger'));
+        else if (d.error === 'exec_disabled') showToast('Print failed: allow exec() in php.ini', 'danger');
+        else showToast('Print failed: ' + (d.error || 'unknown'), 'danger');
+    }).catch(e => showToast('Print error (bad response)', 'danger'));
 }
 <?php if ($autoPrint):    ?>window.addEventListener('load', () => setTimeout(printPosReceipt, 500));<?php endif; ?>
 <?php if ($cashDrawer):  ?>window.addEventListener('load', () => setTimeout(openCashDrawer, 800));<?php endif; ?>

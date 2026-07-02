@@ -864,8 +864,10 @@ if ($action === 'report_analysis') {
 // ── print_receipt: spawn PowerShell WebBrowser.Print() — no dialog, no PDF ──
 if ($action === 'print_receipt') {
     requireLogin();
+    ob_start(); // capture any PHP warnings so they don't break the JSON response
+
     $html = $_POST['html'] ?? '';
-    if (!$html) { echo json_encode(['ok' => false, 'error' => 'No HTML']); exit; }
+    if (!$html) { ob_end_clean(); echo json_encode(['ok' => false, 'error' => 'No HTML']); exit; }
 
     $base     = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pos_rcpt_' . time() . '_' . rand(1000, 9999);
     $htmlFile = $base . '.html';
@@ -873,7 +875,6 @@ if ($action === 'print_receipt') {
 
     file_put_contents($htmlFile, $html);
 
-    // Forward-slash paths work fine in PowerShell and avoid escaping headaches
     $hPs = str_replace('"', '`"', str_replace('\\', '/', $htmlFile));
     $sPs = str_replace('"', '`"', str_replace('\\', '/', $psFile));
 
@@ -905,7 +906,34 @@ Add-Type -AssemblyName System.Windows.Forms
 PS;
 
     file_put_contents($psFile, $ps);
-    pclose(popen('start "" /b powershell.exe -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File "' . $psFile . '"', 'r'));
+
+    // Try multiple exec methods — popen/exec may be restricted in some php.ini configs
+    $psExe  = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+    $psArgs = ' -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File "' . $psFile . '"';
+    $cmd    = 'start "" /b "' . $psExe . '"' . $psArgs;
+
+    $launched = false;
+    $disabled = array_map('trim', explode(',', strtolower(ini_get('disable_functions'))));
+
+    if (!$launched && !in_array('popen', $disabled)) {
+        $h = @popen($cmd, 'r');
+        if ($h !== false) { @pclose($h); $launched = true; }
+    }
+    if (!$launched && !in_array('exec', $disabled)) {
+        @exec($cmd, $out, $ret);
+        $launched = true;
+    }
+    if (!$launched && !in_array('shell_exec', $disabled)) {
+        @shell_exec($cmd);
+        $launched = true;
+    }
+
+    ob_end_clean();
+
+    if (!$launched) {
+        echo json_encode(['ok' => false, 'error' => 'exec_disabled']);
+        exit;
+    }
 
     echo json_encode(['ok' => true]);
     exit;
