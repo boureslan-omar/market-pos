@@ -872,6 +872,24 @@ if ($action === 'print_receipt') {
     $htmlFile = $base . '.html';
     $psFile   = $base . '.ps1';
 
+    // Inline any relative images as base64 so the temp file is self-contained
+    $html = preg_replace_callback(
+        '/src="(\/[^"]+\.(png|jpg|jpeg|gif|webp|svg))"/i',
+        function ($m) {
+            $file = rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/\\') . str_replace('/', DIRECTORY_SEPARATOR, $m[1]);
+            if (file_exists($file)) {
+                $mime = mime_content_type($file) ?: 'image/png';
+                return 'src="data:' . $mime . ';base64,' . base64_encode(file_get_contents($file)) . '"';
+            }
+            return $m[0];
+        },
+        $html
+    );
+
+    // Add bottom margin so paper advances past the cutter after printing
+    $cutterCss = '@page{margin-bottom:35mm}body::after{content:"";display:block;height:35mm}';
+    $html = str_replace('</style>', $cutterCss . '</style>', $html);
+
     file_put_contents($htmlFile, $html);
 
     $hPs = str_replace('"', '`"', str_replace('\\', '/', $htmlFile));
@@ -900,7 +918,15 @@ Add-Type -AssemblyName System.Windows.Forms
         \$script:frm.Close()
     }
 })
-\$script:frm.Add_Shown({ \$script:wb.Navigate("file:///\$script:f") })
+\$script:frm.Add_Shown({
+    # Clear IE print header/footer so URL, date, page number don't appear on receipt
+    \$rk = "HKCU:\Software\Microsoft\Internet Explorer\PageSetup"
+    if (Test-Path \$rk) {
+        Set-ItemProperty -Path \$rk -Name "header" -Value "" -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path \$rk -Name "footer" -Value "" -ErrorAction SilentlyContinue
+    }
+    \$script:wb.Navigate("file:///\$script:f")
+})
 [System.Windows.Forms.Application]::Run(\$script:frm)
 PS;
 

@@ -1,7 +1,7 @@
 {
-    "version": "3.5.12",
+    "version": "3.5.13",
     "release_date": "2026-07-02",
-    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.12/dahdouh-v3.5.12.zip",
+    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.13/dahdouh-v3.5.13.zip",
     "upgrades": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
-    "changelog": "v3.5.12 — Fixed fatal error in print_receipt: removed call to undefined requireLogin() function. Auth is already checked at the top of api.php."
+    "changelog": "v3.5.13 — Receipt logo now prints correctly (inlined as base64). IE page headers/footers (URL, page number) removed from printout. Bottom margin added so paper advances past the cutter."
 }
