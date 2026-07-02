@@ -1,7 +1,7 @@
 {
-    "version": "3.5.21",
+    "version": "3.5.22",
     "release_date": "2026-07-02",
-    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.21/dahdouh-v3.5.21.zip",
+    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.22/dahdouh-v3.5.22.zip",
     "upgrades": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
-    "changelog": "v3.5.21 - Product import page: upload Odoo XLSX, auto-generates EAN-13 barcodes for untagged products, creates categories, dry-run preview before committing."
+    "changelog": "v3.5.22 - Import page: better error messages, ZipArchive status indicator, temp folder fix, move_uploaded_file check."
 }
