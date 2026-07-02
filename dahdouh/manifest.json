@@ -1,7 +1,7 @@
 {
-    "version": "3.5.13",
+    "version": "3.5.14",
     "release_date": "2026-07-02",
-    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.13/dahdouh-v3.5.13.zip",
+    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.14/dahdouh-v3.5.14.zip",
     "upgrades": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
-    "changelog": "v3.5.13 — Receipt logo now prints correctly (inlined as base64). IE page headers/footers (URL, page number) removed from printout. Bottom margin added so paper advances past the cutter."
+    "changelog": "v3.5.14 — Fixed dashboard error: added requireRole() fallback in functions.php for clients whose config.php predates the function."
 }

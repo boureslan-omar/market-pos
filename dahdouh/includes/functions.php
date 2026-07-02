@@ -1,5 +1,14 @@
 <?php
 
+// Fallback in case an older config.php on a client machine didn't define requireRole()
+if (!function_exists('requireRole')) {
+    function requireRole(string ...$roles): void {
+        if (empty($_SESSION['user_id'])) {
+            header('Location: /dahdouh/login.php'); exit;
+        }
+    }
+}
+
 // ─── Formatting ──────────────────────────────────────────────────────────────
 
 function fmtUSD($v) { return '$' . number_format((float)$v, 2); }
