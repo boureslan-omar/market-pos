@@ -1,7 +1,7 @@
 {
-    "version": "3.5.11",
+    "version": "3.5.12",
     "release_date": "2026-07-02",
-    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.11/dahdouh-v3.5.11.zip",
+    "download_url": "https://github.com/boureslan-omar/market-pos/releases/download/v3.5.12/dahdouh-v3.5.12.zip",
     "upgrades": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
-    "changelog": "v3.5.11 — Fixed print_receipt exec compatibility: output buffering prevents PHP warnings from breaking JSON response; falls back through popen/exec/shell_exec automatically; uses full PowerShell path."
+    "changelog": "v3.5.12 — Fixed fatal error in print_receipt: removed call to undefined requireLogin() function. Auth is already checked at the top of api.php."
 }

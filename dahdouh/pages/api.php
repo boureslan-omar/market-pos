@@ -863,7 +863,6 @@ if ($action === 'report_analysis') {
 
 // ── print_receipt: spawn PowerShell WebBrowser.Print() — no dialog, no PDF ──
 if ($action === 'print_receipt') {
-    requireLogin();
     ob_start(); // capture any PHP warnings so they don't break the JSON response
 
     $html = $_POST['html'] ?? '';
