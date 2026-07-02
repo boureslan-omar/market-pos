@@ -66,7 +66,7 @@ echo  [..] Checking for updates...
 "C:\xampp\php\php.exe" "C:\xampp\htdocs\dahdouh\auto_update.php" >> "C:\xampp\htdocs\dahdouh\auto_update.log" 2>&1
 echo  [OK] Update check done.
 
-:: ── Step 4: Open POS in browser (kiosk-printing = no print dialog) ────────────
+:: ── Step 4: Open POS in browser ──────────────────────────────────────────────
 :OPEN_BROWSER
 echo.
 echo  =========================================
@@ -74,11 +74,6 @@ echo   Ready! Opening POS in browser...
 echo  =========================================
 echo.
 timeout /t 1 /nobreak >nul
-
-:: Force Chrome/Edge to use the Windows default printer with kiosk-printing
-:: (without this, kiosk-printing uses the last saved destination which may be PDF)
-reg add "HKCU\SOFTWARE\Policies\Google\Chrome"    /v "DefaultPrinterSelection" /t REG_SZ /d "{\"kind\":\"default\"}" /f >nul 2>&1
-reg add "HKCU\SOFTWARE\Policies\Microsoft\Edge"   /v "DefaultPrinterSelection" /t REG_SZ /d "{\"kind\":\"default\"}" /f >nul 2>&1
 
 set POS_URL=http://localhost/dahdouh/
 set BROWSER=
@@ -92,7 +87,7 @@ if not defined BROWSER (
 )
 
 if defined BROWSER (
-    start "" "%BROWSER%" --kiosk-printing "%POS_URL%"
+    start "" "%BROWSER%" "%POS_URL%"
 ) else (
     start "POS" /b "%POS_URL%"
 )

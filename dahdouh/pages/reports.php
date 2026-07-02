@@ -774,16 +774,13 @@ function printReceiptWindow() {
         '.badge{display:inline-block;border:1px solid #000;padding:1px 6px;font-weight:bold;font-size:11px}' +
         'hr{border:none;border-top:1px dashed #000;margin:4px 0}' +
         '.small{font-size:10px}.mt-1{margin-top:2px}.mt-2{margin-top:4px}.mt-3{margin-top:6px}.mb-0{margin-bottom:0}.mb-3{margin-bottom:6px}';
-    let frame = document.getElementById('receipt-print-frame');
-    if (!frame) {
-        frame = document.createElement('iframe');
-        frame.id = 'receipt-print-frame';
-        frame.style.cssText = 'position:fixed;left:-9999px;top:0;width:80mm;height:1px;border:0;visibility:hidden';
-        document.body.appendChild(frame);
-    }
-    frame.onload = function() { frame.contentWindow.focus(); frame.contentWindow.print(); frame.onload = null; };
-    frame.srcdoc = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Receipt</title>' +
+    const full = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Receipt</title>' +
         '<style>' + css + '</style></head><body>' + html + '</body></html>';
+    fetch('/dahdouh/pages/api.php?action=print_receipt', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'html=' + encodeURIComponent(full)
+    }).catch(() => {});
 }
 </script>
 

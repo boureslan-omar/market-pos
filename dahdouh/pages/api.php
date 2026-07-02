@@ -861,4 +861,54 @@ if ($action === 'report_analysis') {
     exit;
 }
 
+// ── print_receipt: spawn PowerShell WebBrowser.Print() — no dialog, no PDF ──
+if ($action === 'print_receipt') {
+    requireLogin();
+    $html = $_POST['html'] ?? '';
+    if (!$html) { echo json_encode(['ok' => false, 'error' => 'No HTML']); exit; }
+
+    $base     = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pos_rcpt_' . time() . '_' . rand(1000, 9999);
+    $htmlFile = $base . '.html';
+    $psFile   = $base . '.ps1';
+
+    file_put_contents($htmlFile, $html);
+
+    // Forward-slash paths work fine in PowerShell and avoid escaping headaches
+    $hPs = str_replace('"', '`"', str_replace('\\', '/', $htmlFile));
+    $sPs = str_replace('"', '`"', str_replace('\\', '/', $psFile));
+
+    $ps = <<<PS
+Add-Type -AssemblyName System.Windows.Forms
+\$script:f    = "$hPs"
+\$script:s    = "$sPs"
+\$script:done = \$false
+\$script:frm  = New-Object System.Windows.Forms.Form
+\$script:frm.ShowInTaskbar = \$false
+\$script:frm.Opacity = 0
+\$script:frm.WindowState = "Minimized"
+\$script:wb = New-Object System.Windows.Forms.WebBrowser
+\$script:wb.Dock = "Fill"
+\$script:frm.Controls.Add(\$script:wb)
+\$script:wb.Add_DocumentCompleted({
+    if (-not \$script:done) {
+        \$script:done = \$true
+        Start-Sleep -Milliseconds 400
+        \$script:wb.Print()
+        Start-Sleep -Seconds 3
+        Remove-Item \$script:f -ErrorAction SilentlyContinue
+        Remove-Item \$script:s -ErrorAction SilentlyContinue
+        \$script:frm.Close()
+    }
+})
+\$script:frm.Add_Shown({ \$script:wb.Navigate("file:///\$script:f") })
+[System.Windows.Forms.Application]::Run(\$script:frm)
+PS;
+
+    file_put_contents($psFile, $ps);
+    pclose(popen('start "" /b powershell.exe -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File "' . $psFile . '"', 'r'));
+
+    echo json_encode(['ok' => true]);
+    exit;
+}
+
 echo json_encode(['error' => 'Unknown action']);
